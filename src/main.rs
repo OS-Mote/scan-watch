@@ -10,18 +10,34 @@
 use bt_hci::controller::ExternalController;
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer};
-use esp_hal::clock::CpuClock;
 use esp_radio::ble::controller::BleConnector;
 use trouble_host::prelude::*;
-use esp_hal::peripherals::WIFI;
-use esp_hal::peripherals::BT;
-use esp_hal::gpio::{Level, Output, OutputConfig, AnyPin};
-use esp_hal::delay::Delay;
 use embedded_hal::delay::DelayNs;
-use esp_hal::spi::master::{Config as SpiConfig, Spi};
-use esp_hal::spi::Mode as SpiMode;
-use esp_hal::time::Rate;
-use esp_hal::timer::timg::TimerGroup;
+
+use esp_hal::{
+    peripherals::{
+        WIFI,
+        BT
+    },
+    gpio::{
+        Level,
+        Output,
+        OutputConfig,
+        AnyPin
+    },
+    delay::Delay,
+    clock::CpuClock,
+    time::Rate,
+    timer::timg::TimerGroup,
+    spi::{
+        master::{
+            Config as SpiConfig,
+            Spi
+        },
+        Mode as SpiMode
+    }
+};
+
 use esp_println::println;
 use ieee80211::{match_frames, mgmt_frame::BeaconFrame};
 use embassy_executor::task;
@@ -29,8 +45,13 @@ use embassy_futures::join::join;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use mipidsi::interface::SpiInterface;
 use alloc::rc::Rc;
-use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
-use slint::platform::software_renderer::{LineBufferProvider, Rgb565Pixel};
+
+use slint::platform::software_renderer::{
+    MinimalSoftwareWindow,
+    RepaintBufferType,
+    LineBufferProvider,
+    Rgb565Pixel
+};
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -228,12 +249,6 @@ async fn wifi_sniffing_task(wifi: WIFI<'static>) {
                 };
 
                 println!("Wifi AP with SSID: {ssid}");
-
-                // if critical_section::with(|cs| {
-                //     KNOWN_SSIDS.borrow_ref_mut(cs).insert(ssid.to_string())
-                // }) {
-                //     println!("Found new AP with SSID: {ssid}");
-                // }
             }
         };
     });
@@ -243,20 +258,7 @@ async fn wifi_sniffing_task(wifi: WIFI<'static>) {
     }
 }
 
-slint::slint! {
-    export component MainWindow inherits Window {
-        width: 410px;
-        height: 502px;
-        background: #000000;
-        Text {
-            text: "3-Arg Interface Fixed";
-            color: #ffaa00;
-            font-size: 24px;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-}
+slint::slint!(export { MainWindow } from "ui/app-window.slint";);
 
 #[allow(
     clippy::large_stack_frames,

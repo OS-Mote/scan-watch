@@ -61,6 +61,10 @@ embedded-hal-bus = "0.3.0"
 slint = { version = "1.17.1", default-features = false, features = ["compat-1-2", "unsafe-single-threaded", "renderer-software", "libm"] }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 ft3x68-rs = { version = "0.1.2", default-features = false }
+
+[build-dependencies]
+slint-build = "1.16.1"
+
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
 [profile.dev]
 # The default debug profile is too slow and too big for resource-constrained devices.
