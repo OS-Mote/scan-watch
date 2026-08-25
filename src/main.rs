@@ -390,7 +390,6 @@ async fn main(spawner: Spawner) -> ! {
     });
 
     main_window.on_set_remote_id_scan_task_command(move |command| {
-        println!("Signaling Remote Id scan task command.");
         REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
     });
 
@@ -693,6 +692,5 @@ async fn remote_id_detection_task() {
                 REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Stopped);
             }
         }
-        Timer::after_millis(16).await;
     }
 }
