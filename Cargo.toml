@@ -3,13 +3,23 @@ edition      = "2024"
 name         = "scan-watch"
 rust-version = "1.88"
 version      = "0.1.0"
+build        = "build.rs"
+resolver     = "2" 
+
+[profile.dev]
+opt-level = "s" # Optimizes code size to prevent async task stack overflow crashes
+
+[profile.release]
+opt-level = 3
+lto = 'fat'
 
 [[bin]]
 name = "scan-watch"
 path = "./src/main.rs"
 
 [dependencies]
-esp-hal = { version = "~1.1.0", features = ["esp32s3", "unstable"] }
+slint = { version = "1.7", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
+esp-hal = { version = "1.1.1", default-features = false, features = ["esp32s3", "unstable"] }
 chrono = { version = "0.4.45", default-features = false }
 
 esp-rtos = { version = "0.3.0", features = [
@@ -55,24 +65,35 @@ ieee80211 = "0.5.9"
 embassy-futures = "0.1.2"
 embassy-sync = "0.8.0"
 mipidsi = "0.10.0"
+dummy-pin = "1.0.0"
 embedded-graphics = "0.8.2"
 embedded-hal = "1.0.0"
-embedded-hal-bus = "0.3.0"
-slint = { version = "1.17.1", default-features = false, features = ["compat-1-2", "unsafe-single-threaded", "renderer-software", "libm"] }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-ft3x68-rs = { version = "0.1.2", default-features = false }
+embedded-hal-async = "1.0.0"
+axp2101-dd = "0.2.3"
+display-driver = "0.1.0"
+display-driver-co5300 = "0.1.1"
+embedded-graphics-core = "0.4.1"
+port-expander = "0.6.5"
+embedded-hal-bus = "0.3.0"
+cst92xx = { path = "../cst92xx-touch-driver" }
+jiff = { version = "0.2.35", default-features = false, features = ["static", "tzdb-bundle-always"] }
+esp-nvs = { version = "0.5.0", features = ["esp32s3"] }
+esp-storage = { version = "0.9.0", features = ["esp32s3"] }
+embassy-net = { version = "0.9.1", features = ["proto-ipv4", "medium-ethernet", "tcp", "udp"] }
+# jiff-static = { version = "0.2.35", features = ["tzdb"] }
 
 [build-dependencies]
-slint-build = "1.16.1"
+slint-build = { version = "1.7" }
 
 # For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
-[profile.dev]
-# The default debug profile is too slow and too big for resource-constrained devices.
-# Always build with some optimizations enabled.
-opt-level = "s"
+# [profile.dev]
+# # The default debug profile is too slow and too big for resource-constrained devices.
+# # Always build with some optimizations enabled.
+# opt-level = "s"
 
-[profile.release]
-codegen-units = 1     # LLVM can perform better optimizations using a single thread
-debug         = 2     # prefer slower builds but better debugging experience
-lto           = 'fat'
-opt-level     = 's'
+# [profile.release]
+# codegen-units = 1     # LLVM can perform better optimizations using a single thread
+# debug         = 2     # prefer slower builds but better debugging experience
+# lto           = 'fat'
+# opt-level     = 's'

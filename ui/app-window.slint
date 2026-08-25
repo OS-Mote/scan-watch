@@ -1,12 +1,674 @@
-    export component MainWindow inherits Window {
-        width: 410px;
-        height: 502px;
-        background: #000000;
-        Text {
-            text: "3-Arg Interface Fixed";
-            color: #ffaa00;
-            font-size: 24px;
-            horizontal-alignment: center;
-            vertical-alignment: center;
+import { SpinBox, ComboBox, Button, ScrollView, Slider, StandardListView, HorizontalBox, RadioGroup } from "std-widgets.slint";
+import "../resources/fonts/SF-Pro-Rounded-Regular.otf";
+
+export component BatteryIndicator inherits Rectangle {
+    in-out property <int> value: 50;
+    in-out property <bool> charging: false;
+    out property <image> icon;
+    in property <length> icon-size: 16px;
+
+    Image {
+        source: root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+    }
+
+    states [
+        charging when charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-charging-50-2-rounded.png");
+        }
+        full when value >= 90 && !charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-100-rounded.png");
+        }
+        two-thirds when value < 90 && value > 75 && !charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-075-rounded.png");
+        }
+        half when value <= 75 && value > 50 && !charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-050-rounded.png");
+        }
+        one-third when value <= 50 && value > 25 && !charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-025-rounded.png");
+        }
+        empty when value <= 25 && !charging: {
+            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-000-rounded.png");
+        }
+    ]
+}
+
+export component ImageButton inherits TouchArea {
+    in property <image> icon;
+    in property <length> icon-size: 16px;
+
+    container := Rectangle {
+        icon := Image {
+            source: root.icon;
+            width: root.icon-size;
+            height: root.icon-size;
+            image-fit: contain;
+
+            animate colorize {
+                duration: 100ms;
+            }
         }
     }
+
+    states [  
+        pressed when root.pressed: {
+            icon.colorize: #808080;
+        }
+    ]
+}
+
+export component TextButton inherits TouchArea {
+    in property <string> text;
+    in property <color> color: white;
+    Rectangle {
+        text := Text {
+            text: root.text;
+            color: color;
+            font-size: 32px;
+            vertical-alignment: top;
+            horizontal-alignment: center;
+        }
+    }
+
+    states [  
+        pressed when root.pressed: {
+            text.color: #808080;
+        }
+    ]
+}
+
+export component Counter inherits Rectangle {
+    in-out property <int> value;
+    in property <int> minimum;
+    in property <int> maximum;
+
+    HorizontalLayout {
+        TextButton {
+            text: "-";
+            clicked => { if value != minimum { value = value - 1 } }
+        }
+        Rectangle {}
+        Text {
+            text: value;
+            color: white;
+            vertical-alignment: top;
+            horizontal-alignment: center;
+        }
+        Rectangle {}
+        TextButton {
+            text: "+";
+            clicked => { if value != maximum { value = value + 1 } }
+        }
+    }
+}
+
+export enum RemoteIdScanTaskCommand {
+    start,
+    stop
+}
+
+export enum RemoteIdScanTaskState {
+    running,
+    stopped
+}
+
+export component MainWindow inherits Window {
+    out property <int> hour: 0;
+    out property <int> minute: 0;
+    out property <int> second: 0;
+    out property <int> day: 0;
+    out property <int> month: 0;
+    out property <int> year: 0;
+    out property <int> day-of-week: 0;
+    out property <bool> showing-settings: false;
+    out property <bool> showing-flashlight: false;
+    in property <bool> remote-id-detected: false;
+    in-out property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
+
+    pure callback set-date(month: int, day: int, year: int);
+    pure callback get-date() -> [int]; // Day, month, years
+    pure callback set-time(hour: int, minute: int, second: int);
+    pure callback get-time() -> [int]; // Hour, minute, second
+    pure callback set-timezone-offset(offset: int);
+    pure callback get-timezone-offset() -> int;
+    pure callback get-days-in-year-month(year: int, month: int) -> int;
+    pure callback set-screen-brightness(brightness: int);
+    pure callback get-screen-brightness() -> int;
+    pure callback set-screen-timeout(timeout: int);
+    pure callback get-screen-timeout() -> int;
+    pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
+    callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
+    callback update-battery-status(percent-charged: int, is-charging: bool);
+
+    update-datetime(hour, minute, second, day, month, year, day-of-week) => {
+        root.hour = hour;
+        root.minute = minute;
+        root.second = second;
+        root.day = day;
+        root.month = month;
+        root.year = year;
+        root.day-of-week = day-of-week;
+    }
+
+    update-battery-status(percent-charged, is-charging) => {
+        battery-indicator.value = percent-charged;
+        battery-indicator.charging = is-charging;
+    }
+
+    width: 410px;
+    height: 502px;
+    background: black;
+    default-font-family: "SF Pro Rounded";
+    default-font-size: 32px;
+
+    watch-view := SwipeGestureHandler {
+        VerticalLayout {
+            Rectangle {
+                HorizontalLayout {
+                    ImageButton {
+                        icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
+                        icon-size: 64px;
+                    }
+                    ImageButton {
+                        icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
+                        icon-size: 64px;
+                    }
+                    Rectangle {
+                        height: parent.height / 3;
+                    }
+                    ImageButton {
+                        icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
+                        icon-size: 64px;
+                        clicked => {
+                            if root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped {
+                                root.set_remote_id_scan_task_command(RemoteIdScanTaskCommand.start);
+                            } else if root.remote-id-scan-task-state == RemoteIdScanTaskState.running {
+                                root.set_remote_id_scan_task_command(RemoteIdScanTaskCommand.stop);
+                            }
+                        }
+
+                        states [
+                            detected when root.remote-id-scan-task-state == RemoteIdScanTaskState.running  && root.remote-id-detected: {
+                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded-3.png");
+                            }
+                            running when root.remote-id-scan-task-state == RemoteIdScanTaskState.running && !root.remote-id-detected: {
+                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded-2.png");
+                            }
+                            stopped when root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped: {
+                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
+                            }
+                        ]
+                    }
+
+                    padding: 32px;
+                }
+                
+                height: parent.height / 3;
+            }
+            Rectangle {
+                VerticalLayout {
+                    Text {
+                        text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][root.day-of-week];
+                        color: white;
+                        font-size: 32px;
+                        vertical-alignment: bottom;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        Rectangle {}
+                        Text {
+                            text: (hour < 10 ? "0" : "") + hour;
+                            color: white;
+                            font-size: 72px;
+                            font-weight: FontWeight.black;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: right;
+                            width: 90px;
+                        }
+                        Text {
+                            text: ":";
+                            color: white;
+                            font-size: 72px;
+                            font-weight: FontWeight.black;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: (minute < 10 ? "0" : "") + minute;
+                            color: white;
+                            font-size: 72px;
+                            font-weight: FontWeight.black;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: center;
+                            width: 88px;
+                        }
+                        Text {
+                            text: ":";
+                            color: white;
+                            font-size: 72px;
+                            font-weight: FontWeight.black;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: (second < 10 ? "0" : "") + second;
+                            color: white;
+                            font-size: 72px;
+                            font-weight: FontWeight.black;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: left;
+                            width: 88px;
+                        }
+                        Rectangle {}
+                    }
+                    Text {
+                        text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + year;
+                        color: white;
+                        font-size: 32px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                height: parent.height / 3;
+            }
+            battery-indicator := BatteryIndicator {
+                icon-size: 64px;
+            }
+        }
+
+        swiped => {
+            if self.current-position.x > self.pressed-position.x + self.width / 4 {
+                showing-flashlight = true;
+            } else if self.current-position.x < self.pressed-position.x - self.width / 4 {
+                showing-settings = true;
+            }
+        }
+
+        handle-swipe-right: true;
+        handle-swipe-left: true;
+        visible: !root.showing-settings;
+    }
+
+    if showing-flashlight : Rectangle {
+        SwipeGestureHandler {
+            Rectangle {
+                background: white;
+            }
+
+            swiped => {
+                showing-flashlight = false;
+            }
+
+            handle-swipe-left: true;
+        }
+    }
+
+    if showing-settings : settings-container := Rectangle {
+        out property <bool> showing-date: false;
+        out property <bool> showing-timezone: false;
+        out property <bool> showing-time: false;
+        out property <bool> showing-screen: false;
+
+        settings-view := VerticalLayout {
+            SwipeGestureHandler {
+                Flickable {
+                    VerticalLayout {
+                        TextButton { height: 96px; text: "Date"; 
+                            clicked => { showing-date = !showing-date; }
+                        }
+                        TextButton {
+                            height: 96px; text: "Time";
+                            clicked => { showing-time = !showing-time; }
+                        }
+                        TextButton {
+                            height: 96px; text: "Timezone";
+                            clicked => { showing-timezone = !showing-timezone; }
+                        }
+                        TextButton {
+                            height: 96px; text: "Screen";
+                            clicked => { showing-screen = !showing-screen; }
+                        }
+                        TextButton { height: 96px; text: "Scan Duration"; }
+                        TextButton { height: 96px; text: "GPS"; }
+                        TextButton { height: 96px; text: "Logging"; }
+                        TextButton { height: 96px; text: "SD Card"; }
+                    }
+                }
+                swiped => {
+                    root.showing-settings = false;
+                }
+
+                handle-swipe-right: true;
+            }
+
+            visible: root.showing-settings;
+        }
+
+        if showing-date : Rectangle {
+            function month-from-index(month: int) -> string {
+                ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month];
+            }
+            
+            function update-days-in-month(year: int, month: int) {
+                day-slider.maximum = root.get-days-in-year-month(year, month);
+
+                if day-slider.value > day-slider.maximum { day-slider.value = day-slider.maximum };
+            }
+
+            init => {
+                let date = root.get-date();
+
+                day-slider.value = date[0];
+                month-slider.value = date[1];
+                year-slider.value = date[2];
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Date";
+                        color: white;
+                        font-size: 64px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text { text: "Year"; color: white; }
+                        Text {
+                            text: round(year-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    year-slider := Slider{
+                        value: 2025;
+                        minimum: 2025;
+                        maximum: 2050;
+
+                        changed(_) => {
+                            update-days-in-month(year-slider.value, month-slider.value);
+                        }
+                    }
+                    HorizontalLayout {
+                        Text { text: "Month"; color: white; }
+                        Text {
+                            text: month-from-index(month-slider.value -1);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    month-slider := Slider{
+                        value: 1;
+                        minimum: 1;
+                        maximum: 12;
+
+                        changed(_) => {
+                            update-days-in-month(round(year-slider.value), round(month-slider.value));
+                        }
+                    }
+                    HorizontalLayout {
+                        Text { text: "Day"; color: white; }
+                        Text {
+                            text: round(day-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    day-slider := Slider{
+                        value: 1;
+                        minimum: 1;
+                        maximum: 30;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-date = !showing-date; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            clicked => {
+                                root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
+
+                                showing-date = !showing-date;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+        if showing-timezone : Rectangle {
+            init => {
+                timezone-slider.value = root.get-timezone-offset();
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Timezone";
+                        color: white;
+                        font-size: 64px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text { text: "Offset"; color: white; }
+                        Text {
+                            text: round(timezone-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    timezone-slider := Slider{
+                        value: 0;
+                        minimum: -23;
+                        maximum: 23;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-timezone = !showing-timezone; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            clicked => {
+                                root.set-timezone-offset(round(timezone-slider.value));
+
+                                showing-timezone = !showing-timezone;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+
+        if showing-time : Rectangle {
+            init => {
+                let time = root.get-time();
+
+                hour-slider.value = time[0];
+                minute-slider.value = time[1];
+                second-slider.value = time[2];
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Time";
+                        color: white;
+                        font-size: 64px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text { text: "Hour"; color: white; }
+                        Text {
+                            text: round(hour-slider.value);
+                            color: white;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    hour-slider := Slider {
+                        value: 11;
+                        minimum: 0;
+                        maximum: 23;
+                        step: 1;
+                    }
+                    HorizontalLayout {
+                        Text { text: "Minute"; color: white; }
+                        Text {
+                            text: round(minute-slider.value);
+                            color: white;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    minute-slider := Slider {
+                        value: 29;
+                        minimum: 0;
+                        maximum: 59;
+                        step: 1;
+                    }
+                    HorizontalLayout {
+                        Text { text: "Second"; color: white; }
+                        Text {
+                            text: round(second-slider.value);
+                            color: white;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    second-slider := Slider {
+                        value: 29;
+                        minimum: 0;
+                        maximum: 59;
+                        step: 1;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-time = !showing-time; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            clicked => {
+                                root.set-time(round(hour-slider.value), round(minute-slider.value), round(second-slider.value));
+
+                                showing-time = !showing-time;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+        if showing-screen : Rectangle {
+            init => {
+                brightness-slider.value = root.get-screen-brightness();
+                timeout-slider.value = root.get-screen-timeout();
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Screen";
+                        color: white;
+                        font-size: 64px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text { text: "Brightness"; color: white; }
+                        Text {
+                            text: round(brightness-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    brightness-slider := Slider{
+                        value: 255;
+                        minimum: 32;
+                        maximum: 255;
+                        step: 1;
+                    }
+                    HorizontalLayout {
+                        Text { text: "Timeout"; color: white; }
+                        Text {
+                            text: round(timeout-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    timeout-slider := Slider{
+                        value: 5;
+                        minimum: 5;
+                        maximum: 30;
+                        step: 1;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-screen = !showing-screen; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            clicked => {
+
+                                root.set-screen-brightness(round(brightness-slider.value));
+                                root.set-screen-timeout(round(timeout-slider.value));
+
+                                showing-screen = !showing-screen;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+    }
+}
