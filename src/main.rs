@@ -390,6 +390,7 @@ async fn main(spawner: Spawner) -> ! {
     });
 
     main_window.on_set_remote_id_scan_task_command(move |command| {
+        println!("Signaling Remote Id scan task command.");
         REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
     });
 
@@ -402,7 +403,25 @@ async fn main(spawner: Spawner) -> ! {
     main_window.show().unwrap();
 
     loop {
-        Timer::after_millis(16).await;   
+        Timer::after_millis(16).await;
+
+        // Fixme
+
+        if REMOTE_ID_SCAN_TASK_STATE.signaled() {
+            main_window.set_remote_id_scan_task_state(REMOTE_ID_SCAN_TASK_STATE.wait().await);
+        }
+
+        if REMOTE_ID_DETECTED.signaled() {
+            last_remote_id_detection = Some(REMOTE_ID_DETECTED.wait().await);
+
+            main_window.set_remote_id_detected(true);
+        } else {
+            if let Some(detection) = last_remote_id_detection && detection.elapsed().as_secs() > 30 {
+                last_remote_id_detection = None;
+
+                main_window.set_remote_id_detected(false);
+            }
+        }
 
         if let Ok(touches) = touch_driver.touches() {
             if let Some(Some(touch_point)) = touches.first() {
@@ -445,24 +464,6 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Display is on, continue drawing the display..
-
-        // Fixme
-
-        if REMOTE_ID_SCAN_TASK_STATE.signaled() {
-            main_window.set_remote_id_scan_task_state(REMOTE_ID_SCAN_TASK_STATE.wait().await);
-        }
-
-        if REMOTE_ID_DETECTED.signaled() {
-            last_remote_id_detection = Some(REMOTE_ID_DETECTED.wait().await);
-
-            main_window.set_remote_id_detected(true);
-        } else {
-            if let Some(detection) = last_remote_id_detection && detection.elapsed().as_secs() > 30 {
-                last_remote_id_detection = None;
-
-                main_window.set_remote_id_detected(false);
-            }
-        }
 
         let date_time = critical_section::with(|cs| {
             get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
@@ -645,12 +646,14 @@ async fn remote_id_detection_task() {
                 ).unwrap();
 
                 let mut wifi_controller_guard = WIFI_CONTROLLER_MUTEX.lock().await;
+                
                 *wifi_controller_guard = Some(wifi_controller);
 
                 let mut wifi_sniffer_guard = WIFI_SNIFFER_MUTEX.lock().await;
+
                 *wifi_sniffer_guard = Some(wifi_interfaces.sniffer);
 
-                if let Some(wifi_sniffer) = WIFI_SNIFFER_MUTEX.lock().await.as_mut() {
+                if let Some(wifi_sniffer) = wifi_sniffer_guard.as_mut() {
                     wifi_sniffer.set_receive_cb(|packet| {
                         let _ = match_frames! {
                             packet.data,
@@ -690,5 +693,6 @@ async fn remote_id_detection_task() {
                 REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Stopped);
             }
         }
+        Timer::after_millis(16).await;
     }
 }
