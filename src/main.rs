@@ -154,7 +154,8 @@ static POWER_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice
 static STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
 static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
 static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
-static DISPLAY_ON_CELL: StaticCell<CriticalSectionMutex<RefCell<bool>>> = StaticCell::new();
+
+static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 
 static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, RemoteIdScanTaskState> = Signal::new();
@@ -250,7 +251,6 @@ async fn main(spawner: Spawner) -> ! {
         .expect("Could not create window");
 
     let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
-    let display_on_cell = DISPLAY_ON_CELL.init(CriticalSectionMutex::new(RefCell::new(true)));
     let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
     let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
     let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
@@ -378,7 +378,7 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(battery_status_task(power_cell).unwrap());
     spawner.spawn(touch_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(storage_cell).unwrap());
-    spawner.spawn(display_timeout_countdown_task(display_cell, display_on_cell, storage_cell).unwrap());
+    spawner.spawn(display_timeout_countdown_task(display_cell, storage_cell).unwrap());
     spawner.spawn(wifi_sniffing_task().unwrap());
 
     let mut last_remote_id_detection: Option<Instant> = None;
@@ -420,7 +420,9 @@ async fn main(spawner: Spawner) -> ! {
 
         // Display is off, skip the rest of the loop.
 
-        if critical_section::with(|cs| {!*display_on_cell.borrow(cs).borrow() }) { continue; }
+        if !*DISPLAY_ON_MUTEX.lock().await { continue };
+
+        // if critical_section::with(|cs| {!*display_on_cell.borrow(cs).borrow() }) { continue; }
             
         // Display is on, continue drawing the display..
 
@@ -456,8 +458,8 @@ async fn main(spawner: Spawner) -> ! {
 
         if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
             main_window.invoke_update_battery_status(
-                battery_status.0 as i32,
-                battery_status.1
+                battery_status.0 as i32, // Percentage
+                battery_status.1 // Is charging
             );
         }
 
@@ -613,22 +615,24 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 }
 
 #[task]
-async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, display_on_cell: &'static CriticalSectionMutex<RefCell<bool>>, storage_cell: &'static CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>) {
+async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, storage_cell: &'static CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>) {
     loop {
         let display_timeout = critical_section::with(|cs| {            
             display_cell.borrow(cs).borrow_mut().display_on();
-            display_on_cell.borrow(cs).replace(true);
 
             get_display_timeout(&mut storage_cell.borrow(cs).borrow_mut()) as u64
         });
+
+        *DISPLAY_ON_MUTEX.lock().await = true;
 
         Timer::after_secs(display_timeout).await;
         
         if !DISPLAY_TOUCHED.signaled() {
             critical_section::with(|cs| {
                 display_cell.borrow(cs).borrow_mut().display_off();
-                display_on_cell.borrow(cs).replace(false);
             });
+
+            *DISPLAY_ON_MUTEX.lock().await = false;
         }
 
         DISPLAY_TOUCHED.wait().await;
