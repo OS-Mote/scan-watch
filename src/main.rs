@@ -243,12 +243,6 @@ async fn main(spawner: Spawner) -> ! {
 
     software_window.set_size(slint::PhysicalSize::new(LCD_WIDTH as u32, LCD_HEIGHT as u32));
 
-    let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
-    let display_on_cell = DISPLAY_ON_CELL.init(CriticalSectionMutex::new(RefCell::new(true)));
-    let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
-    let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
-    let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
-
     let platform = EmbassySlintPlatform::new(software_window.clone());
 
     slint::platform::set_platform(alloc::boxed::Box::new(platform))
@@ -256,6 +250,12 @@ async fn main(spawner: Spawner) -> ! {
 
     let main_window = MainWindow::new()
         .expect("Could not create window");
+
+    let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
+    let display_on_cell = DISPLAY_ON_CELL.init(CriticalSectionMutex::new(RefCell::new(true)));
+    let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
+    let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
+    let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
 
     main_window.on_set_date(|month, day, year| {
         let date_time = critical_section::with(|cs| {
