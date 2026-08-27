@@ -15,7 +15,6 @@ use alloc::{
     rc::Rc,
     vec
 };
-use bt_hci::controller::ExternalController;
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
 use chrono::{
@@ -26,7 +25,6 @@ use chrono::{
     Timelike
 };
 use esp_hal::{
-    clock::CpuClock,
     delay::Delay,
     dma::{
         DmaRxBuf,
@@ -63,13 +61,16 @@ use esp_nvs::{
 };
 use esp_radio::{
     ble::controller::BleConnector,
-    wifi::WifiController
+    wifi::{
+        WifiController
+    }
 };
 use embassy_sync::{
     blocking_mutex::CriticalSectionMutex,
     mutex::Mutex,
     blocking_mutex::raw::CriticalSectionRawMutex,
-    signal::Signal
+    signal::Signal,
+    channel::Channel
 };
 use embassy_executor::{
     Spawner,
@@ -79,8 +80,6 @@ use embassy_time::{
     Timer,
     Instant
 };
-use embassy_futures::join::join;
-use embassy_futures::select::select;
 use ieee80211::{
     match_frames,
     mgmt_frame::{
@@ -92,8 +91,7 @@ use ieee80211::{
 use core::cell::RefCell;
 use embedded_hal_bus::i2c::RefCellDevice;
 use embedded_graphics::{
-    pixelcolor::Rgb565,
-    prelude::*
+    pixelcolor::Rgb565, prelude::*
 };
 use slint::{
     VecModel,
@@ -107,7 +105,7 @@ use slint::{
         WindowEvent
     }
 };
-use cst92xx::BlockingCST92xx;
+use cst92xx::{BlockingCST92xx, Point as TouchPoint};
 
 mod qspi_bus;
 mod framebuffer;
@@ -116,11 +114,7 @@ mod co5300;
 mod defaults;
 
 use crate::{
-    axp2101::Axp2101,
-    framebuffer::Framebuffer,
-    qspi_bus::QspiBus,
-    co5300::*,
-    defaults::*
+    TouchUpdate::{Moved, Pressed, Released}, axp2101::Axp2101, co5300::*, defaults::*, framebuffer::Framebuffer, qspi_bus::QspiBus
 };
 
 #[panic_handler]
@@ -156,19 +150,21 @@ impl slint::platform::Platform for EmbassySlintPlatform {
     }
 }
 
-const CONNECTIONS_MAX: usize = 1;
-const L2CAP_CHANNELS_MAX: usize = 4;
-
 static POWER_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>> = StaticCell::new();
 static STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
 static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
+static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
 static WIFI_CONTROLLER_MUTEX: Mutex<CriticalSectionRawMutex, Option<WifiController<'static>>> = Mutex::new(None);
 static WIFI_SNIFFER_MUTEX: Mutex<CriticalSectionRawMutex, Option<Sniffer<'static>>> = Mutex::new(None);
 static DISPLAY_ON_CELL: StaticCell<CriticalSectionMutex<RefCell<bool>>> = StaticCell::new();
+
 static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, RemoteIdScanTaskState> = Signal::new();
 static REMOTE_ID_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static DISPLAY_TOUCH_UPDATED: Signal<CriticalSectionRawMutex, TouchUpdate> = Signal::new();
+static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
+static DATE_TIME_UPDATED: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
 
 #[allow(
     clippy::large_stack_frames,
@@ -191,27 +187,21 @@ async fn main(spawner: Spawner) -> ! {
         peripherals.I2C0,
         I2cConfig::default().with_frequency(Rate::from_khz(400)),
     )
-        .unwrap()
+        .expect("i2c failed")
         .with_sda(peripherals.GPIO3)
         .with_scl(peripherals.GPIO2);
 
     let i2c_ref = RefCell::new(i2c);
     let i2c_ref_boxed = Box::new(i2c_ref);
     let static_i2c_ref: &'static mut RefCell<I2c<'_, esp_hal::Blocking>> = Box::leak(i2c_ref_boxed);
+    let i2c_ref_cell_device = RefCellDevice::new(static_i2c_ref);
 
-    let axp2101_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(Axp2101::new(RefCellDevice::new(static_i2c_ref)))));
+    let mut power = Axp2101::new(i2c_ref_cell_device);
+    let _ = power.init();
+    let _ = power.trim_adc_channels();
 
-    critical_section::with(|cs| {
-        let mut axp2101 = axp2101_cell.borrow(cs).borrow_mut(); 
-        let _ = axp2101.init();
-        let _ = axp2101.trim_adc_channels();
-    });
-
-    println!("[POWER] OK");
-
-    let storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH)).unwrap();
-    let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
-
+    let mut storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH)).unwrap();
+    
     let spi_config = SpiConfig::default()
         .with_frequency(Rate::from_mhz(80))
         .with_mode(SpiMode::_0);
@@ -234,45 +224,38 @@ async fn main(spawner: Spawner) -> ! {
     let mut display = Co5300Display::new(QspiBus::new(spi, cs), reset);
 
     display.init();
+    display.set_brightness(get_display_brightness(&mut storage));
 
     // Enable Tearing Effect output on CO5300 (TE pin = GPIO13)
     // Command 0x35 = TEARON, param 0x00 = VBlank only
     display.bus_mut().write_c8d8(0x35, 0x00);
 
     let te_pin = Input::new(peripherals.GPIO13, InputConfig::default());
-    
-    println!("[DISPLAY] OK (TE VSync enabled)");
-
-    let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
-    let display_on_cell = DISPLAY_ON_CELL.init(CriticalSectionMutex::new(RefCell::new(true)));
-    
     let mut framebuffer = Framebuffer::new();
-    
+
     framebuffer.clear_color(Rgb565::BLACK);
+    framebuffer.flush(&mut display);
     
-    critical_section::with(|cs| {
-        let mut display = display_cell.borrow(cs).borrow_mut();
-        let mut storage = storage_cell.borrow(cs).borrow_mut();
-
-        framebuffer.flush(&mut display);
-
-        display.set_brightness(get_display_brightness(&mut storage));
-    });
-    
-    println!("[FB] OK");
-
-    let mut touch_driver = BlockingCST92xx::new(RefCellDevice::new(static_i2c_ref), 0x1A, Delay::new());
-    let _ = touch_driver.init();
+    let mut touch = BlockingCST92xx::new(RefCellDevice::new(static_i2c_ref), 0x1A, Delay::new());
+    let _ = touch.init();
 
     let software_window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
 
     software_window.set_size(slint::PhysicalSize::new(LCD_WIDTH as u32, LCD_HEIGHT as u32));
 
+    let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
+    let display_on_cell = DISPLAY_ON_CELL.init(CriticalSectionMutex::new(RefCell::new(true)));
+    let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
+    let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
+    let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
+
     let platform = EmbassySlintPlatform::new(software_window.clone());
 
-    slint::platform::set_platform(alloc::boxed::Box::new(platform)).unwrap();
+    slint::platform::set_platform(alloc::boxed::Box::new(platform))
+        .expect("Slint platform initilization failed");
 
-    let main_window = MainWindow::new().unwrap();
+    let main_window = MainWindow::new()
+        .expect("Could not create window");
 
     main_window.on_set_date(|month, day, year| {
         let date_time = critical_section::with(|cs| {
@@ -393,25 +376,63 @@ async fn main(spawner: Spawner) -> ! {
         REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
     });
 
+    spawner.spawn(battery_status_task(power_cell).unwrap());
+    spawner.spawn(touch_update_task(touch_cell).unwrap());
+    spawner.spawn(date_time_update_task(storage_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, display_on_cell, storage_cell).unwrap());
-    spawner.spawn(remote_id_detection_task().unwrap());
-    
-    let mut last_touch_point: Option<cst92xx::Point> = None;
+    spawner.spawn(wifi_sniffing_task().unwrap());
+
     let mut last_remote_id_detection: Option<Instant> = None;
 
     main_window.show().unwrap();
 
     loop {
-        Timer::after_millis(16).await;
+        Timer::after_millis(8).await;
+
+        if let Some(touch_update) = DISPLAY_TOUCH_UPDATED.try_take() {
+            match touch_update {
+                Pressed(point) => {
+                    software_window.dispatch_event(
+                        WindowEvent::PointerPressed {
+                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32),
+                            button: PointerEventButton::Left
+                        }
+                    );
+                }
+                Moved(point) => {
+                    software_window.dispatch_event(
+                        WindowEvent::PointerMoved {
+                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32)
+                        }
+                    );
+                }
+                Released(point) => {
+                    software_window.dispatch_event(
+                        WindowEvent::PointerReleased {
+                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32), 
+                            button: PointerEventButton::Left 
+                        }
+                    );
+                }
+            }
+        }
+
+        slint::platform::update_timers_and_animations();
+
+        // Display is off, skip the rest of the loop.
+
+        if critical_section::with(|cs| { !*display_on_cell.borrow(cs).borrow() }) { continue; }
+            
+        // Display is on, continue drawing the display..
 
         // Fixme
 
-        if REMOTE_ID_SCAN_TASK_STATE.signaled() {
-            main_window.set_remote_id_scan_task_state(REMOTE_ID_SCAN_TASK_STATE.wait().await);
+        if let Some(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE.try_take() {
+            main_window.set_remote_id_scan_task_state(remote_id_scan_task_state);
         }
 
-        if REMOTE_ID_DETECTED.signaled() {
-            last_remote_id_detection = Some(REMOTE_ID_DETECTED.wait().await);
+        if let Some(remote_id_detected) = REMOTE_ID_DETECTED.try_take() {
+            last_remote_id_detection = Some(remote_id_detected);
 
             main_window.set_remote_id_detected(true);
         } else {
@@ -422,75 +443,24 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
 
-        if let Ok(touches) = touch_driver.touches() {
-            if let Some(Some(touch_point)) = touches.first() {
-                DISPLAY_TOUCHED.signal(());
-
-                if last_touch_point.is_some() {
-                    software_window.dispatch_event(
-                        WindowEvent::PointerMoved {
-                            position: slint::LogicalPosition::new(touch_point.x as f32, touch_point.y as f32)
-                        }
-                    );
-                } else {
-                    software_window.dispatch_event(
-                        WindowEvent::PointerPressed {
-                            position: slint::LogicalPosition::new(touch_point.x as f32, touch_point.y as f32),
-                            button: PointerEventButton::Left
-                        }
-                    );
-                }
-
-                last_touch_point = Some(*touch_point);
-
-            } else if let Some(touch_point) = last_touch_point {
-                software_window.dispatch_event(
-                    WindowEvent::PointerReleased {
-                        position: slint::LogicalPosition::new(touch_point.x as f32, touch_point.y as f32), 
-                        button: PointerEventButton::Left 
-                    }
-                );
-
-                last_touch_point = None;
-            }
+        if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
+            main_window.invoke_update_datetime(
+                date_time.hour() as i32,
+                date_time.minute() as i32,
+                date_time.second() as i32,
+                date_time.day() as i32,
+                date_time.month() as i32,
+                date_time.year(),
+                date_time.weekday() as i32
+            );
         }
 
-        slint::platform::update_timers_and_animations();
-
-        if critical_section::with(|cs| { !*display_on_cell.borrow(cs).borrow() }) {
-            // Display is off, skip the rest of the loop.
-            continue;
+        if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
+            main_window.invoke_update_battery_status(
+                battery_status.0 as i32,
+                battery_status.1
+            );
         }
-
-        // Display is on, continue drawing the display..
-
-        let date_time = critical_section::with(|cs| {
-            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
-        });
-
-        main_window.invoke_update_datetime(
-            date_time.hour() as i32,
-            date_time.minute() as i32,
-            date_time.second() as i32,
-            date_time.day() as i32,
-            date_time.month() as i32,
-            date_time.year(),
-            date_time.weekday() as i32
-        );
-
-        let (battery_percent_charged, battery_charging) = critical_section::with(|cs| {
-            let mut axp2101 = axp2101_cell.borrow(cs).borrow_mut();
-
-            (
-                axp2101.get_battery_percent().unwrap_or(0),
-                axp2101.is_vbus_in().unwrap_or(false) && axp2101.get_battery_voltage().unwrap_or(0) < 4150
-            )
-        });
-
-        main_window.invoke_update_battery_status(
-            battery_percent_charged as i32,
-            battery_charging
-        );
 
         if software_window.draw_if_needed(|renderer| {
             renderer.render(framebuffer.as_rgb565_pixels_mut(), LCD_WIDTH as usize);
@@ -563,6 +533,91 @@ fn get_date_time(storage: &mut Nvs<FlashStorage<'static>>) -> DateTime<FixedOffs
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
 }
 
+enum TouchUpdate {
+    Pressed(TouchPoint),
+    Moved(TouchPoint),
+    Released(TouchPoint)
+}
+
+#[task]
+async fn touch_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
+    let mut last_touch_point: Option<TouchPoint> = None;
+
+    loop {
+        let touches = critical_section::with(|cs| {
+            let mut touch = touch_cell.borrow(cs).borrow_mut();
+
+            touch.touches()
+        });
+
+        if let Ok(touches) = touches {
+            if let Some(Some(touch_point)) = touches.first() { // We only care about one-finger touches
+                DISPLAY_TOUCHED.signal(());
+
+                if last_touch_point.is_some() {
+                    DISPLAY_TOUCH_UPDATED.signal(Moved(*touch_point));
+                } else {
+                    DISPLAY_TOUCH_UPDATED.signal(Pressed(*touch_point));
+                }
+
+                last_touch_point = Some(*touch_point);
+
+            } else if let Some(touch_point) = last_touch_point {
+                DISPLAY_TOUCH_UPDATED.signal(Released(touch_point));
+
+                last_touch_point = None;
+            }
+        }
+
+        Timer::after_millis(16).await;
+    }
+}
+
+#[task]
+async fn date_time_update_task(storage_cell: &'static CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>) {
+    let mut last_date_time = critical_section::with(|cs| {
+        get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+    });    
+
+    loop {
+        let date_time = critical_section::with(|cs| {
+            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+        });
+
+        if date_time != last_date_time {
+            DATE_TIME_UPDATED.signal(date_time);
+
+            last_date_time = date_time;
+        }
+
+        Timer::after_millis(500).await;
+    }
+}
+
+#[task]
+async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>) {
+    let mut last_battery_status: (u8, bool) = (0, false);
+
+    loop {
+        let battery_status = critical_section::with(|cs| {
+            let mut power = power_cell.borrow(cs).borrow_mut();
+
+            (
+                power.get_battery_percent().unwrap_or(0),
+                power.is_vbus_in().unwrap_or(false) && power.get_battery_voltage().unwrap_or(0) < 4150
+            )
+        });
+
+        if battery_status != last_battery_status {
+            BATTERY_STATUS_UPDATED.signal(battery_status);
+
+            last_battery_status = battery_status;
+        }
+
+        Timer::after_secs(10).await
+    }
+}
+
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, display_on_cell: &'static CriticalSectionMutex<RefCell<bool>>, storage_cell: &'static CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>) {
     loop {
@@ -585,6 +640,9 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
         DISPLAY_TOUCHED.wait().await;
     }
 }
+
+// const CONNECTIONS_MAX: usize = 1;
+// const L2CAP_CHANNELS_MAX: usize = 4;
 
 // struct BleScanHandler {}
 
@@ -628,8 +686,34 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
 //     .await;
 // }
 
+
+
+// fn is_remote_id_packet<'a>(packet: &PromiscuousPkt<'a>) -> bool {
+//     let _ = match_frames! {
+//         packet.data,
+//         beacon = BeaconFrame => {
+//             for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
+//                 if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
+//                     return true;
+//                     //REMOTE_ID_DETECTED.signal(Instant::now());
+//                 }
+//             }
+//         }
+//         action = RawActionFrame => {
+//             if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
+//                 return true;
+//                 // REMOTE_ID_DETECTED.signal(Instant::now());
+//             }
+//         }
+//     };
+
+//     return false
+// }
+
+static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Channel::new();
+
 #[task]
-async fn remote_id_detection_task() {
+async fn wifi_sniffing_task() {
     loop {
         match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
             RemoteIdScanTaskCommand::Start => {
