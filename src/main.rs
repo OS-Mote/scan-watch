@@ -422,8 +422,6 @@ async fn main(spawner: Spawner) -> ! {
 
         if !*DISPLAY_ON_MUTEX.lock().await { continue };
 
-        // if critical_section::with(|cs| {!*display_on_cell.borrow(cs).borrow() }) { continue; }
-            
         // Display is on, continue drawing the display..
 
         // Fixme
