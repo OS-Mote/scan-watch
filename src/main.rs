@@ -270,7 +270,9 @@ async fn main(spawner: Spawner) -> ! {
             .to_utc();
 
         critical_section::with(|cs| {
-            set_time(adjusted_datetime.timestamp_micros(), &mut storage_cell.borrow(cs).borrow_mut());
+            let mut storage = storage_cell.borrow(cs).borrow_mut();
+
+            set_time(adjusted_datetime.timestamp_micros(), &mut storage);
         });
     });
 
@@ -306,7 +308,6 @@ async fn main(spawner: Spawner) -> ! {
             let mut storage = storage_cell.borrow(cs).borrow_mut();
 
             set_time(adjusted_datetime.timestamp_micros(), &mut storage);
-            set_timestamp_set(Instant::now().as_micros(), &mut storage);
         });
     });
 
@@ -503,15 +504,12 @@ fn get_timezone_offset(storage: &mut Nvs<FlashStorage<'static>>) -> i32 {
 
 fn set_time(timestamp: i64, storage: &mut Nvs<FlashStorage<'static>>) {
     let _ = storage.set(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_DEFAULT_KEY), timestamp);
+    let _ = storage.set(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SET_DEFAULT_KEY), Instant::now().as_micros());
 }
 
 fn get_timestamp(storage: &mut Nvs<FlashStorage<'static>>) -> i64 {
     storage.get(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_DEFAULT_KEY))
         .unwrap_or(TIMESTAMP_DEFAULT)
-}
-
-fn set_timestamp_set(timestamp_set: u64, storage: &mut Nvs<FlashStorage<'static>>) {
-    let _ = storage.set(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SET_DEFAULT_KEY), timestamp_set);
 }
 
 fn get_timestamp_set(storage: &mut Nvs<FlashStorage<'static>>) -> u64 {
@@ -573,9 +571,7 @@ async fn touch_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<Blo
 
 #[task]
 async fn date_time_update_task(storage_cell: &'static CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>) {
-    let mut last_date_time = critical_section::with(|cs| {
-        get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
-    });    
+    let mut last_date_time = DateTime::UNIX_EPOCH.fixed_offset();
 
     loop {
         let date_time = critical_section::with(|cs| {
