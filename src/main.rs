@@ -154,8 +154,6 @@ static POWER_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice
 static STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
 static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
 static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
-static WIFI_CONTROLLER_MUTEX: Mutex<CriticalSectionRawMutex, Option<WifiController<'static>>> = Mutex::new(None);
-static WIFI_SNIFFER_MUTEX: Mutex<CriticalSectionRawMutex, Option<Sniffer<'static>>> = Mutex::new(None);
 static DISPLAY_ON_CELL: StaticCell<CriticalSectionMutex<RefCell<bool>>> = StaticCell::new();
 
 static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
@@ -421,7 +419,7 @@ async fn main(spawner: Spawner) -> ! {
 
         // Display is off, skip the rest of the loop.
 
-        if critical_section::with(|cs| { !*display_on_cell.borrow(cs).borrow() }) { continue; }
+        if critical_section::with(|cs| {!*display_on_cell.borrow(cs).borrow() }) { continue; }
             
         // Display is on, continue drawing the display..
 
@@ -686,92 +684,53 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
 //     .await;
 // }
 
-
-
-// fn is_remote_id_packet<'a>(packet: &PromiscuousPkt<'a>) -> bool {
-//     let _ = match_frames! {
-//         packet.data,
-//         beacon = BeaconFrame => {
-//             for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
-//                 if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
-//                     return true;
-//                     //REMOTE_ID_DETECTED.signal(Instant::now());
-//                 }
-//             }
-//         }
-//         action = RawActionFrame => {
-//             if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
-//                 return true;
-//                 // REMOTE_ID_DETECTED.signal(Instant::now());
-//             }
-//         }
-//     };
-
-//     return false
-// }
-
 static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Channel::new();
 
 #[task]
 async fn wifi_sniffing_task() {
+    let mut last_wifi_controller: Option<WifiController<'static>> = None;
+
     loop {
         match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
             RemoteIdScanTaskCommand::Start => {
-                if WIFI_CONTROLLER_MUTEX.lock().await.is_some() || WIFI_SNIFFER_MUTEX.lock().await.is_some() {
-                    continue;
-                }
+                if last_wifi_controller.is_some() { continue; }
 
                 let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
 
                 let (wifi_controller, wifi_interfaces) = esp_radio::wifi::new(
                     wifi_peripheral, 
                     Default::default()
-                ).unwrap();
+                )
+                    .unwrap();
 
-                let mut wifi_controller_guard = WIFI_CONTROLLER_MUTEX.lock().await;
-                
-                *wifi_controller_guard = Some(wifi_controller);
+                last_wifi_controller = Some(wifi_controller);
 
-                let mut wifi_sniffer_guard = WIFI_SNIFFER_MUTEX.lock().await;
+                let mut wifi_sniffer = wifi_interfaces.sniffer;
 
-                *wifi_sniffer_guard = Some(wifi_interfaces.sniffer);
-
-                if let Some(wifi_sniffer) = wifi_sniffer_guard.as_mut() {
-                    wifi_sniffer.set_receive_cb(|packet| {
-                        let _ = match_frames! {
-                            packet.data,
-                            beacon = BeaconFrame => {
-                                for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
-                                    if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
-                                        REMOTE_ID_DETECTED.signal(Instant::now());
-                                    }
-                                }
-                            }
-                            action = RawActionFrame => {
-                                if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
+                wifi_sniffer.set_receive_cb(|packet| {
+                    let _ = match_frames! {
+                        packet.data,
+                        beacon = BeaconFrame => {
+                            for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
+                                if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
                                     REMOTE_ID_DETECTED.signal(Instant::now());
                                 }
                             }
-                        };
-                    });
+                        }
+                        action = RawActionFrame => {
+                            if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
+                                REMOTE_ID_DETECTED.signal(Instant::now());
+                            }
+                        }
+                    };
+                });
 
-                    let _ = wifi_sniffer.set_promiscuous_mode(true);
+                let _ = wifi_sniffer.set_promiscuous_mode(true);
 
-                    REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Running);
-                }
+                REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Running);
             }
             RemoteIdScanTaskCommand::Stop => {
-                let mut wifi_sniffer_guard = WIFI_SNIFFER_MUTEX.lock().await;
-
-                *wifi_sniffer_guard = None;
-
-                drop(wifi_sniffer_guard);
-
-                let mut wifi_controller_guard = WIFI_CONTROLLER_MUTEX.lock().await;
-
-                *wifi_controller_guard = None;
-
-                drop(wifi_controller_guard);
+                last_wifi_controller = None;
 
                 REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Stopped);
             }
