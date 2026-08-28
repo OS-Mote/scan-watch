@@ -117,7 +117,15 @@ mod co5300;
 mod defaults;
 
 use crate::{
-    TouchUpdate::{Moved, Pressed, Released}, axp2101::Axp2101, co5300::*, defaults::*, framebuffer::Framebuffer, qspi_bus::QspiBus
+    defaults::*,
+    axp2101::Axp2101,
+    co5300::{
+        Co5300Display,
+        LCD_WIDTH,
+        LCD_HEIGHT
+    },
+    framebuffer::Framebuffer,
+    qspi_bus::QspiBus
 };
 
 #[panic_handler]
@@ -394,7 +402,7 @@ async fn main(spawner: Spawner) -> ! {
 
         if let Some(touch_update) = DISPLAY_TOUCH_UPDATED.try_take() {
             match touch_update {
-                Pressed(point) => {
+                TouchUpdate::Pressed(point) => {
                     software_window.dispatch_event(
                         WindowEvent::PointerPressed {
                             position: slint::LogicalPosition::new(point.x as f32, point.y as f32),
@@ -402,14 +410,14 @@ async fn main(spawner: Spawner) -> ! {
                         }
                     );
                 }
-                Moved(point) => {
+                TouchUpdate::Moved(point) => {
                     software_window.dispatch_event(
                         WindowEvent::PointerMoved {
                             position: slint::LogicalPosition::new(point.x as f32, point.y as f32)
                         }
                     );
                 }
-                Released(point) => {
+                TouchUpdate::Released(point) => {
                     software_window.dispatch_event(
                         WindowEvent::PointerReleased {
                             position: slint::LogicalPosition::new(point.x as f32, point.y as f32), 
@@ -549,15 +557,15 @@ async fn touch_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<Blo
                 DISPLAY_TOUCHED.signal(());
 
                 if last_touch_point.is_some() {
-                    DISPLAY_TOUCH_UPDATED.signal(Moved(*touch_point));
+                    DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Moved(*touch_point));
                 } else {
-                    DISPLAY_TOUCH_UPDATED.signal(Pressed(*touch_point));
+                    DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Pressed(*touch_point));
                 }
 
                 last_touch_point = Some(*touch_point);
 
             } else if let Some(touch_point) = last_touch_point {
-                DISPLAY_TOUCH_UPDATED.signal(Released(touch_point));
+                DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Released(touch_point));
 
                 last_touch_point = None;
             }
