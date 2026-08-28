@@ -6,6 +6,10 @@
     holding buffers for the duration of a data transfer."
 )]
 #![deny(clippy::large_stack_frames)]
+#![allow(clippy::type_complexity)]
+#![allow(unused_imports, dead_code)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::manual_range_contains)]
 
 extern crate alloc;
 
@@ -53,7 +57,6 @@ use esp_hal::{
     time::Rate,
     timer::timg::TimerGroup,
 };
-use esp_radio::wifi::sniffer::Sniffer;
 use esp_storage::FlashStorage;
 use esp_nvs::{
     Nvs,
@@ -62,7 +65,8 @@ use esp_nvs::{
 use esp_radio::{
     ble::controller::BleConnector,
     wifi::{
-        WifiController
+        WifiController,
+        sniffer::Sniffer
     }
 };
 use embassy_sync::{
@@ -72,14 +76,13 @@ use embassy_sync::{
     signal::Signal,
     channel::Channel
 };
+
 use embassy_executor::{
-    Spawner,
-    task
+    task,
+    Spawner
 };
-use embassy_time::{
-    Timer,
-    Instant
-};
+
+use embassy_time::{ Timer, Instant };
 use ieee80211::{
     match_frames,
     mgmt_frame::{
@@ -226,8 +229,8 @@ async fn main(spawner: Spawner) -> ! {
     display.init();
     display.set_brightness(get_display_brightness(&mut flash_storage));
 
-    // Enable Tearing Effect output on CO5300 (TE pin = GPIO13)
-    // Command 0x35 = TEARON, param 0x00 = VBlank only
+    // Enable Tearing Effect output on CO5300 (TE pin is GPIO13)
+    // Using command 0x35 (TEARON) and param 0x00 (VBlank only)
     display.bus_mut().write_c8d8(0x35, 0x00);
 
     let te_pin = Input::new(peripherals.GPIO13, InputConfig::default());
