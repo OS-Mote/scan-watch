@@ -99,6 +99,7 @@ use embedded_graphics::{
 use slint::{
     VecModel,
     ModelRc,
+    LogicalPosition,
     platform::{
         software_renderer::{
             MinimalSoftwareWindow,
@@ -172,7 +173,7 @@ static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScan
 static REMOTE_ID_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, RemoteIdScanTaskState> = Signal::new();
 static REMOTE_ID_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-static DISPLAY_TOUCH_UPDATED: Signal<CriticalSectionRawMutex, TouchUpdate> = Signal::new();
+static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
 static DATE_TIME_UPDATED: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
 
@@ -317,9 +318,7 @@ async fn main(spawner: Spawner) -> ! {
             .to_utc();
 
         critical_section::with(|cs| {
-            let mut storage = flash_storage_cell.borrow(cs).borrow_mut();
-
-            set_time(adjusted_datetime.timestamp_micros(), &mut storage);
+            set_time(adjusted_datetime.timestamp_micros(), &mut flash_storage_cell.borrow(cs).borrow_mut());
         });
     });
 
@@ -388,7 +387,7 @@ async fn main(spawner: Spawner) -> ! {
     });
 
     spawner.spawn(battery_status_task(power_cell).unwrap());
-    spawner.spawn(touch_update_task(touch_cell).unwrap());
+    spawner.spawn(touch_event_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(flash_storage_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, flash_storage_cell).unwrap());
     spawner.spawn(wifi_sniffing_task().unwrap());
@@ -400,32 +399,8 @@ async fn main(spawner: Spawner) -> ! {
     loop {
         Timer::after_millis(8).await;
 
-        if let Some(touch_update) = DISPLAY_TOUCH_UPDATED.try_take() {
-            match touch_update {
-                TouchUpdate::Pressed(point) => {
-                    software_window.dispatch_event(
-                        WindowEvent::PointerPressed {
-                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32),
-                            button: PointerEventButton::Left
-                        }
-                    );
-                }
-                TouchUpdate::Moved(point) => {
-                    software_window.dispatch_event(
-                        WindowEvent::PointerMoved {
-                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32)
-                        }
-                    );
-                }
-                TouchUpdate::Released(point) => {
-                    software_window.dispatch_event(
-                        WindowEvent::PointerReleased {
-                            position: slint::LogicalPosition::new(point.x as f32, point.y as f32), 
-                            button: PointerEventButton::Left 
-                        }
-                    );
-                }
-            }
+        if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
+            software_window.dispatch_event(touch_event);
         }
 
         slint::platform::update_timers_and_animations();
@@ -529,7 +504,8 @@ fn get_date_time(storage: &mut Nvs<FlashStorage<'static>>) -> DateTime<FixedOffs
     let timestamp = get_timestamp(storage);
     let timestamp_set = get_timestamp_set(storage);
     let timezone_offset = get_timezone_offset(storage);
-    let now_ticks = Instant::now().as_micros();
+    let now_ticks = Instant::now().as_micros() + timestamp_set;
+
     let elapsed_micros = now_ticks.saturating_sub(timestamp_set);
 
     DateTime::from_timestamp_micros(timestamp + (elapsed_micros as i64))
@@ -537,35 +513,38 @@ fn get_date_time(storage: &mut Nvs<FlashStorage<'static>>) -> DateTime<FixedOffs
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
 }
 
-enum TouchUpdate {
-    Pressed(TouchPoint),
-    Moved(TouchPoint),
-    Released(TouchPoint)
-}
-
 #[task]
-async fn touch_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
+async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
     let mut last_touch_point: Option<TouchPoint> = None;
 
     loop {
-        let touches = critical_section::with(|cs| {
+        if let Ok(touches) = critical_section::with(|cs| {
             touch_cell.borrow(cs).borrow_mut().touches()
-        });
-
-        if let Ok(touches) = touches {
+        }) {
             if let Some(Some(touch_point)) = touches.first() { // We only care about one-finger touches
                 DISPLAY_TOUCHED.signal(());
 
-                if last_touch_point.is_some() {
-                    DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Moved(*touch_point));
-                } else {
-                    DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Pressed(*touch_point));
-                }
+                DISPLAY_TOUCH_EVENT_UPDATED.signal(
+                    if last_touch_point.is_some(){
+                        WindowEvent::PointerMoved {
+                            position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32)
+                        }
+                    } else {
+                        WindowEvent::PointerPressed {
+                            position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32),
+                            button: PointerEventButton::Left
+                        }
+                    }  
+                );
 
                 last_touch_point = Some(*touch_point);
-
             } else if let Some(touch_point) = last_touch_point {
-                DISPLAY_TOUCH_UPDATED.signal(TouchUpdate::Released(touch_point));
+                DISPLAY_TOUCH_EVENT_UPDATED.signal(
+                    WindowEvent::PointerReleased {
+                        position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32), 
+                        button: PointerEventButton::Left 
+                    }
+                );
 
                 last_touch_point = None;
             }
