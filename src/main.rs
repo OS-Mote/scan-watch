@@ -151,7 +151,7 @@ impl slint::platform::Platform for EmbassySlintPlatform {
 }
 
 static POWER_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>> = StaticCell::new();
-static STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
+static FLASH_STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
 static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
 static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
 
@@ -186,7 +186,7 @@ async fn main(spawner: Spawner) -> ! {
         peripherals.I2C0,
         I2cConfig::default().with_frequency(Rate::from_khz(400)),
     )
-        .expect("i2c failed")
+        .expect("i2c initilization failed.")
         .with_sda(peripherals.GPIO3)
         .with_scl(peripherals.GPIO2);
 
@@ -199,7 +199,8 @@ async fn main(spawner: Spawner) -> ! {
     let _ = power.init();
     let _ = power.trim_adc_channels();
 
-    let mut storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH)).unwrap();
+    let mut flash_storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH))
+        .expect("Flash storage initilization failed.");
     
     let spi_config = SpiConfig::default()
         .with_frequency(Rate::from_mhz(80))
@@ -209,7 +210,7 @@ async fn main(spawner: Spawner) -> ! {
     let dma_rx = DmaRxBuf::new(rx_desc, rx_buf).unwrap();
     let dma_tx = DmaTxBuf::new(tx_desc, tx_buf).unwrap();
     let spi = Spi::new(peripherals.SPI2, spi_config)
-        .expect("SPI failed")
+        .expect("SPI initilization failed.")
         .with_sck(peripherals.GPIO40)
         .with_sio0(peripherals.GPIO38)
         .with_sio1(peripherals.GPIO39)
@@ -223,7 +224,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut display = Co5300Display::new(QspiBus::new(spi, cs), reset);
 
     display.init();
-    display.set_brightness(get_display_brightness(&mut storage));
+    display.set_brightness(get_display_brightness(&mut flash_storage));
 
     // Enable Tearing Effect output on CO5300 (TE pin = GPIO13)
     // Command 0x35 = TEARON, param 0x00 = VBlank only
@@ -245,19 +246,19 @@ async fn main(spawner: Spawner) -> ! {
     let platform = EmbassySlintPlatform::new(software_window.clone());
 
     slint::platform::set_platform(alloc::boxed::Box::new(platform))
-        .expect("Slint platform initilization failed");
+        .expect("Slint platform initilization failed.");
 
     let main_window = MainWindow::new()
-        .expect("Could not create window");
+        .expect("Could not create window.");
 
     let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
-    let storage_cell = STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(storage)));
+    let flash_storage_cell = FLASH_STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(flash_storage)));
     let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
     let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
 
     main_window.on_set_date(|month, day, year| {
         let date_time = critical_section::with(|cs| {
-            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+            get_date_time(&mut flash_storage_cell.borrow(cs).borrow_mut())
         });
 
         let adjusted_datetime = date_time
@@ -270,7 +271,7 @@ async fn main(spawner: Spawner) -> ! {
             .to_utc();
 
         critical_section::with(|cs| {
-            let mut storage = storage_cell.borrow(cs).borrow_mut();
+            let mut storage = flash_storage_cell.borrow(cs).borrow_mut();
 
             set_time(adjusted_datetime.timestamp_micros(), &mut storage);
         });
@@ -278,7 +279,7 @@ async fn main(spawner: Spawner) -> ! {
 
     main_window.on_get_date(|| {
         let date_time = critical_section::with(|cs| {
-            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+            get_date_time(&mut flash_storage_cell.borrow(cs).borrow_mut())
         });
 
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
@@ -292,7 +293,7 @@ async fn main(spawner: Spawner) -> ! {
 
     main_window.on_set_time(|hour, minute, second| {
         let date_time = critical_section::with(|cs| {
-            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+            get_date_time(&mut flash_storage_cell.borrow(cs).borrow_mut())
         });
 
         let adjusted_datetime = date_time
@@ -305,7 +306,7 @@ async fn main(spawner: Spawner) -> ! {
             .to_utc();
 
         critical_section::with(|cs| {
-            let mut storage = storage_cell.borrow(cs).borrow_mut();
+            let mut storage = flash_storage_cell.borrow(cs).borrow_mut();
 
             set_time(adjusted_datetime.timestamp_micros(), &mut storage);
         });
@@ -313,7 +314,7 @@ async fn main(spawner: Spawner) -> ! {
 
     main_window.on_get_time(|| {
         let date_time = critical_section::with(|cs| {
-            get_date_time(&mut storage_cell.borrow(cs).borrow_mut())
+            get_date_time(&mut flash_storage_cell.borrow(cs).borrow_mut())
         });
 
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
@@ -327,37 +328,37 @@ async fn main(spawner: Spawner) -> ! {
 
     main_window.on_set_timezone_offset(|offset| {
         critical_section::with(|cs| {
-            set_timezone_offset(offset, &mut storage_cell.borrow(cs).borrow_mut());
+            set_timezone_offset(offset, &mut flash_storage_cell.borrow(cs).borrow_mut());
         });
     });
 
     main_window.on_get_timezone_offset(|| {
         critical_section::with(|cs| {
-            get_timezone_offset(&mut storage_cell.borrow(cs).borrow_mut())
+            get_timezone_offset(&mut flash_storage_cell.borrow(cs).borrow_mut())
         })
     });
 
     main_window.on_set_screen_brightness(|brightness| {
         critical_section::with(|cs| {
-            set_display_brightness(brightness as u8, &mut display_cell.borrow(cs).borrow_mut(), &mut storage_cell.borrow(cs).borrow_mut());
+            set_display_brightness(brightness as u8, &mut display_cell.borrow(cs).borrow_mut(), &mut flash_storage_cell.borrow(cs).borrow_mut());
         });
     });
 
     main_window.on_get_screen_brightness(|| {
         critical_section::with(|cs| {
-            get_display_brightness(&mut storage_cell.borrow(cs).borrow_mut()) as i32
+            get_display_brightness(&mut flash_storage_cell.borrow(cs).borrow_mut()) as i32
         })
     });
 
     main_window.on_set_screen_timeout(|timeout| {
         critical_section::with(|cs| {
-            set_display_timeout(timeout as u8, &mut storage_cell.borrow(cs).borrow_mut());
+            set_display_timeout(timeout as u8, &mut flash_storage_cell.borrow(cs).borrow_mut());
         });
     });
 
     main_window.on_get_screen_timeout(|| {
         critical_section::with(|cs| {
-            get_display_timeout(&mut storage_cell.borrow(cs).borrow_mut()) as i32
+            get_display_timeout(&mut flash_storage_cell.borrow(cs).borrow_mut()) as i32
         })
     });
 
@@ -377,8 +378,8 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.spawn(battery_status_task(power_cell).unwrap());
     spawner.spawn(touch_update_task(touch_cell).unwrap());
-    spawner.spawn(date_time_update_task(storage_cell).unwrap());
-    spawner.spawn(display_timeout_countdown_task(display_cell, storage_cell).unwrap());
+    spawner.spawn(date_time_update_task(flash_storage_cell).unwrap());
+    spawner.spawn(display_timeout_countdown_task(display_cell, flash_storage_cell).unwrap());
     spawner.spawn(wifi_sniffing_task().unwrap());
 
     let mut last_remote_id_detection: Option<Instant> = None;
@@ -418,11 +419,7 @@ async fn main(spawner: Spawner) -> ! {
 
         slint::platform::update_timers_and_animations();
 
-        // Display is off, skip the rest of the loop.
-
-        if !*DISPLAY_ON_MUTEX.lock().await { continue };
-
-        // Display is on, continue drawing the display..
+        if !*DISPLAY_ON_MUTEX.lock().await { continue }; // Display is off, skip the rest of the loop.
 
         // Fixme
 
@@ -541,9 +538,7 @@ async fn touch_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<Blo
 
     loop {
         let touches = critical_section::with(|cs| {
-            let mut touch = touch_cell.borrow(cs).borrow_mut();
-
-            touch.touches()
+            touch_cell.borrow(cs).borrow_mut().touches()
         });
 
         if let Ok(touches) = touches {
