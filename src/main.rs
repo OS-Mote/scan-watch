@@ -487,7 +487,6 @@ fn get_timezone_offset(storage: &mut Nvs<FlashStorage<'static>>) -> i32 {
 
 fn set_time(timestamp: i64, storage: &mut Nvs<FlashStorage<'static>>) {
     let _ = storage.set(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_DEFAULT_KEY), timestamp);
-    let _ = storage.set(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SET_DEFAULT_KEY), Instant::now().as_micros());
 }
 
 fn get_timestamp(storage: &mut Nvs<FlashStorage<'static>>) -> i64 {
@@ -495,20 +494,12 @@ fn get_timestamp(storage: &mut Nvs<FlashStorage<'static>>) -> i64 {
         .unwrap_or(TIMESTAMP_DEFAULT)
 }
 
-fn get_timestamp_set(storage: &mut Nvs<FlashStorage<'static>>) -> u64 {
-    storage.get(&Key::from_str(DEFAULTS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SET_DEFAULT_KEY))
-        .unwrap_or(TIMESTAMP_SET_DEFAULT)
-}
-
 fn get_date_time(storage: &mut Nvs<FlashStorage<'static>>) -> DateTime<FixedOffset> {
     let timestamp = get_timestamp(storage);
-    let timestamp_set = get_timestamp_set(storage);
     let timezone_offset = get_timezone_offset(storage);
-    let now_ticks = Instant::now().as_micros() + timestamp_set;
+    let now_ticks = Instant::now().as_micros();
 
-    let elapsed_micros = now_ticks.saturating_sub(timestamp_set);
-
-    DateTime::from_timestamp_micros(timestamp + (elapsed_micros as i64))
+    DateTime::from_timestamp_micros(timestamp + (now_ticks as i64))
         .unwrap()
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
 }

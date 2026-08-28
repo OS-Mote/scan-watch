@@ -8,5 +8,3 @@ pub const TIMEZONE_OFFSET_DEFAULT_KEY: &str = "tz-offset";
 pub const TIMEZONE_OFFSET_DEFAULT: i32 = 0;
 pub const TIMESTAMP_DEFAULT_KEY: &str = "timest";
 pub const TIMESTAMP_DEFAULT: i64 = 0;
-pub const TIMESTAMP_SET_DEFAULT_KEY: &str = "timest-set";
-pub const TIMESTAMP_SET_DEFAULT: u64 = 0;
