@@ -168,8 +168,6 @@ static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'stat
 static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
 static SETTINGS_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
 
-static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
-
 static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, RemoteIdScanTaskState> = Signal::new();
 static REMOTE_ID_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
@@ -404,15 +402,11 @@ async fn main(spawner: Spawner) -> ! {
     main_window.show().unwrap();
 
     loop {
-        Timer::after_millis(8).await;
+        slint::platform::update_timers_and_animations();
 
         if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
             software_window.dispatch_event(touch_event);
         }
-
-        slint::platform::update_timers_and_animations();
-
-        if !*DISPLAY_ON_MUTEX.lock().await { continue }; // Display is off, skip the rest of the loop.
 
         // Fixme
 
@@ -460,6 +454,8 @@ async fn main(spawner: Spawner) -> ! {
                 framebuffer.flush_vsync(&mut display, &te_pin);
             });
         }
+
+        Timer::after_millis(8).await;
     }
 }
 
@@ -519,7 +515,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
             last_date_time = date_time;
         }
 
-        Timer::after_millis(100).await;
+        Timer::after_millis(10).await;
     }
 }
 
