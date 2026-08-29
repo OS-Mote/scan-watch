@@ -22,13 +22,16 @@ const TIMEZONE_OFFSET_SETTINGS_KEY: &str = "tz-offset";
 const TIMEZONE_OFFSET_DEFAULT: i32 = 0;
 const TIMESTAMP_SETTINGS_KEY: &str = "timest";
 const TIMESTAMP_DEFAULT: i64 = 0;
+const TIMESTAMP_OFFSET_SETTINGS_KEY: &str = "timest-off";
+const TIMESTAMP_OFFSET_DEFAULT: u64 = 0;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,
     display_brightness: u8,
     display_timeout: u8,
     timezone_offset: i32,
-    timestamp: i64
+    timestamp: i64,
+    timestamp_offset: u64
 }
 
 impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
@@ -38,8 +41,9 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             display_brightness: DISPLAY_BRIGHTNESS_DEFAULT,
             display_timeout: DISPLAY_TIMEOUT_DEFAULT,
             timezone_offset: TIMEZONE_OFFSET_DEFAULT,
-            timestamp: TIMESTAMP_DEFAULT
-        } 
+            timestamp: TIMESTAMP_DEFAULT,
+            timestamp_offset: TIMESTAMP_OFFSET_DEFAULT
+        }
     }
 
     pub fn init(mut self) -> Self {
@@ -54,7 +58,10 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
                 .unwrap_or(TIMEZONE_OFFSET_DEFAULT);
 
             self.timestamp = self.storage.borrow(cs).borrow_mut().get(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SETTINGS_KEY))
-                .unwrap_or(TIMESTAMP_DEFAULT)
+                .unwrap_or(TIMESTAMP_DEFAULT);
+
+            self.timestamp_offset = self.storage.borrow(cs).borrow_mut().get(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_OFFSET_SETTINGS_KEY))
+                .unwrap_or(TIMESTAMP_OFFSET_DEFAULT);
         });
 
         self
@@ -108,4 +115,15 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
         });
     }
 
+    pub fn set_timestamp_offset(&mut self, timestamp_offset: u64) {
+        critical_section::with(|cs| {
+            if self.storage.borrow(cs).borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_OFFSET_SETTINGS_KEY), timestamp_offset).is_ok() {
+                self.timestamp_offset = timestamp_offset;
+            }
+        });
+    }
+
+    pub fn get_timestamp_offset(&self) -> u64 {
+        self.timestamp_offset
+    }
 }

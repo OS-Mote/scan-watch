@@ -290,6 +290,7 @@ async fn main(spawner: Spawner) -> ! {
 
         critical_section::with(|cs| {
             settings_cell.borrow(cs).borrow_mut().set_timestamp(adjusted_datetime.timestamp_micros());
+            settings_cell.borrow(cs).borrow_mut().set_timestamp_offset(Instant::now().as_micros());
         });
     });
 
@@ -323,6 +324,7 @@ async fn main(spawner: Spawner) -> ! {
 
         critical_section::with(|cs| {
             settings_cell.borrow(cs).borrow_mut().set_timestamp(adjusted_datetime.timestamp_micros());
+            settings_cell.borrow(cs).borrow_mut().set_timestamp_offset(Instant::now().as_micros());
         });
     });
 
@@ -547,26 +549,49 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
-    loop {
-        let display_timeout = critical_section::with(|cs| {            
-            display_cell.borrow(cs).borrow_mut().display_on();
+    let mut last_touch = Instant::now();
+    let mut display_on: bool = true;
 
+    loop {
+        if DISPLAY_TOUCHED.try_take().is_some() {
+            last_touch = Instant::now();
+
+            if !display_on {
+                critical_section::with(|cs| {
+                    display_cell.borrow(cs).borrow_mut().display_on();
+                });
+
+                display_on = true;
+            }
+        }
+
+        let display_timeout = critical_section::with(|cs| {            
             settings_cell.borrow(cs).borrow().get_display_timeout()
         });
 
-        *DISPLAY_ON_MUTEX.lock().await = true;
-
-        Timer::after_secs(display_timeout as u64).await;
-        
-        if !DISPLAY_TOUCHED.signaled() {
+        if Instant::now().duration_since(last_touch).as_secs() > display_timeout as u64 && display_on {
             critical_section::with(|cs| {
                 display_cell.borrow(cs).borrow_mut().display_off();
             });
 
-            *DISPLAY_ON_MUTEX.lock().await = false;
+            display_on = false;
         }
 
-        DISPLAY_TOUCHED.wait().await;
+        Timer::after_millis(500).await;
+
+        // *DISPLAY_ON_MUTEX.lock().await = true;
+
+        // Timer::after_secs(display_timeout as u64).await;
+        
+        // if !DISPLAY_TOUCHED.signaled() {
+        //     critical_section::with(|cs| {
+        //         display_cell.borrow(cs).borrow_mut().display_off();
+        //     });
+
+        //     *DISPLAY_ON_MUTEX.lock().await = false;
+        // }
+
+        // DISPLAY_TOUCHED.wait().await;
     }
 }
 
@@ -671,10 +696,12 @@ async fn wifi_sniffing_task() {
 
 fn get_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>) -> DateTime<FixedOffset> {
     let timestamp = settings.get_timestamp();
+    let timestamp_offset = settings.get_timestamp_offset();
     let timezone_offset = settings.get_timezone_offset();
-    let now_ticks = Instant::now().as_micros();
+    let now_ticks: u64 = Instant::now().as_micros();
+    let elapsed_micros = now_ticks.saturating_sub(timestamp_offset);
 
-    DateTime::from_timestamp_micros(timestamp + (now_ticks as i64))
+    DateTime::from_timestamp_micros(timestamp + (elapsed_micros as i64))
         .unwrap()
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
 }
