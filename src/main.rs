@@ -519,7 +519,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
             last_date_time = date_time;
         }
 
-        Timer::after_millis(500).await;
+        Timer::after_millis(100).await;
     }
 }
 
@@ -563,35 +563,21 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
 
                 display_on = true;
             }
-        }
-
-        let display_timeout = critical_section::with(|cs| {            
-            settings_cell.borrow(cs).borrow().get_display_timeout()
-        });
-
-        if Instant::now().duration_since(last_touch).as_secs() > display_timeout as u64 && display_on {
-            critical_section::with(|cs| {
-                display_cell.borrow(cs).borrow_mut().display_off();
+        } else {
+            let display_timeout = critical_section::with(|cs| {            
+                settings_cell.borrow(cs).borrow().get_display_timeout()
             });
 
-            display_on = false;
+            if Instant::now().duration_since(last_touch).as_secs() > display_timeout as u64 && display_on {
+                critical_section::with(|cs| {
+                    display_cell.borrow(cs).borrow_mut().display_off();
+                });
+
+                display_on = false;
+            }
         }
 
-        Timer::after_millis(500).await;
-
-        // *DISPLAY_ON_MUTEX.lock().await = true;
-
-        // Timer::after_secs(display_timeout as u64).await;
-        
-        // if !DISPLAY_TOUCHED.signaled() {
-        //     critical_section::with(|cs| {
-        //         display_cell.borrow(cs).borrow_mut().display_off();
-        //     });
-
-        //     *DISPLAY_ON_MUTEX.lock().await = false;
-        // }
-
-        // DISPLAY_TOUCHED.wait().await;
+        Timer::after_millis(16).await;
     }
 }
 

@@ -60,8 +60,7 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             self.timestamp = self.storage.borrow(cs).borrow_mut().get(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_SETTINGS_KEY))
                 .unwrap_or(TIMESTAMP_DEFAULT);
 
-            self.timestamp_offset = self.storage.borrow(cs).borrow_mut().get(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(TIMESTAMP_OFFSET_SETTINGS_KEY))
-                .unwrap_or(TIMESTAMP_OFFSET_DEFAULT);
+            self.timestamp_offset = TIMESTAMP_OFFSET_DEFAULT;
         });
 
         self
