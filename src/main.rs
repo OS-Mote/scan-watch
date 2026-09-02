@@ -195,6 +195,7 @@ async fn main(spawner: Spawner) -> ! {
 
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
 
+    // Initialize the i2c bus.
     let i2c = I2c::new(
         peripherals.I2C0,
         I2cConfig::default().with_frequency(Rate::from_khz(400)),
@@ -203,18 +204,22 @@ async fn main(spawner: Spawner) -> ! {
         .with_sda(peripherals.GPIO3)
         .with_scl(peripherals.GPIO2);
 
+    // Derive a RefCellDevice using a static reference via leaking a box to a RefCell containing an i2c bus device handle.
     let i2c_ref = RefCell::new(i2c);
     let i2c_ref_boxed = Box::new(i2c_ref);
     let static_i2c_ref: &'static mut RefCell<I2c<'_, esp_hal::Blocking>> = Box::leak(i2c_ref_boxed);
-    let i2c_ref_cell_device = RefCellDevice::new(static_i2c_ref);
 
-    let mut power = Axp2101::new(i2c_ref_cell_device);
+    // Initialize the power management system.
+    // trim_adc_channels() to save a tiny bit of power.
+    let mut power = Axp2101::new(RefCellDevice::new(static_i2c_ref));
     let _ = power.init();
     let _ = power.trim_adc_channels();
 
+    // Initialize flash storage.
     let flash_storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH))
         .expect("Flash storage initilization failed.");
-    
+
+    // Initialize SPI bus.
     let spi_config = SpiConfig::default()
         .with_frequency(Rate::from_mhz(80))
         .with_mode(SpiMode::_0);
@@ -232,6 +237,8 @@ async fn main(spawner: Spawner) -> ! {
         .with_dma(peripherals.DMA_CH0)
         .with_buffers(dma_rx, dma_tx);
 
+    // Initialize the display.
+
     let cs = Output::new(peripherals.GPIO41, Level::High, OutputConfig::default());
     let reset = Output::new(peripherals.GPIO37, Level::High, OutputConfig::default());
     let mut display = Co5300Display::new(QspiBus::new(spi, cs), reset);
@@ -243,11 +250,14 @@ async fn main(spawner: Spawner) -> ! {
     display.bus_mut().write_c8d8(0x35, 0x00);
 
     let te_pin = Input::new(peripherals.GPIO13, InputConfig::default());
+
+    // Initilize the framebuffer
     let mut framebuffer = Framebuffer::new();
 
     framebuffer.clear_color(Rgb565::BLACK);
     framebuffer.flush(&mut display);
-    
+
+    // Initialize the touch system.
     let mut touch = BlockingCST92xx::new(RefCellDevice::new(static_i2c_ref), 0x1A, Delay::new());
     let _ = touch.init();
 
@@ -404,6 +414,7 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(remote_id_sniffing_task().unwrap());
     spawner.spawn(smart_glasses_scan_task().unwrap());
 
+    let mut last_smart_glasses_detection: Option<Instant> = None;
     let mut last_remote_id_detection: Option<Instant> = None;
 
     main_window.show().unwrap();
@@ -437,6 +448,18 @@ async fn main(spawner: Spawner) -> ! {
             main_window.set_smart_glasses_scan_task_state(smart_glasses_scan_task_state);
         }
 
+        if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED.try_take() {
+            last_smart_glasses_detection = Some(smart_glasses_detected);
+
+            main_window.set_smart_glasses_detected(true);
+        } else {
+            if let Some(detection) = last_smart_glasses_detection && detection.elapsed().as_secs() > 30 {
+                last_smart_glasses_detection = None;
+
+                main_window.set_smart_glasses_detected(false);
+            }
+        }
+
         if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
             main_window.invoke_update_datetime(
                 date_time.hour() as i32,
@@ -466,7 +489,7 @@ async fn main(spawner: Spawner) -> ! {
             });
         }
 
-        Timer::after_millis(8).await;
+        Timer::after_millis(16).await;
     }
 }
 
@@ -588,18 +611,23 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
     }
 }
 
-struct BleScanHandler {}
+const SMART_GLASSES_BLE_COMPANY_IDENTIFIERS: [u16; 3] = [
+    0x01AB, // Meta Platforms
+    0x058E, // Meta Platforms Technologies
+    0x0D53, // Luxottica
+];
 
-impl EventHandler for BleScanHandler {
+struct SmartGlassesScanHandler {}
+
+impl EventHandler for SmartGlassesScanHandler {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
         while let Some(Ok(report)) = it.next() {
             let mut decoder = AdStructure::decode(report.data);
 
             while let Some(Ok(structure)) = decoder.next() {
-                if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure {
+                if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
+                SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
                     SMART_GLASSES_DETECTED.signal(Instant::now());
-
-                    // println!("BT device with manufacturer ID: 0x{:04X}", company_identifier);
                 }
             }
         }
@@ -629,8 +657,7 @@ async fn smart_glasses_scan_task() {
                     let Host { central, mut runner, .. } = stack.build();
                     let mut scanner = Scanner::new(central);
                     let scan_config = ScanConfig::default();
-
-                    let ble_scan_handler = BleScanHandler{};
+                    let ble_scan_handler = SmartGlassesScanHandler{};
 
                     let _ = join(
                         runner.run_with_handler(&ble_scan_handler),
@@ -659,13 +686,9 @@ static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Ch
 
 #[task]
 async fn remote_id_sniffing_task() {
-    let mut last_wifi_controller: Option<WifiController<'static>> = None;
-
     loop {
         match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
             RemoteIdScanTaskCommand::Start => {
-                if last_wifi_controller.is_some() { continue; }
-
                 let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
 
                 let (wifi_controller, wifi_interfaces) = esp_radio::wifi::new(
@@ -673,8 +696,6 @@ async fn remote_id_sniffing_task() {
                     Default::default()
                 )
                     .unwrap();
-
-                last_wifi_controller = Some(wifi_controller);
 
                 let mut wifi_sniffer = wifi_interfaces.sniffer;
 
@@ -701,8 +722,6 @@ async fn remote_id_sniffing_task() {
                 REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Running);
             }
             RemoteIdScanTaskCommand::Stop => {
-                last_wifi_controller = None;
-
                 REMOTE_ID_SCAN_TASK_STATE.signal(RemoteIdScanTaskState::Stopped);
             }
         }
