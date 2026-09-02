@@ -596,7 +596,6 @@ struct BleScanHandler {}
 
 impl EventHandler for BleScanHandler {
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
-        println!("Got BT packet");
         while let Some(Ok(report)) = it.next() {
             let mut decoder = AdStructure::decode(report.data);
 
@@ -613,18 +612,6 @@ impl EventHandler for BleScanHandler {
 
 const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 4;
-
-            // loop {
-            //     println!("Running");
-            //     SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Running);
-
-            //     if SMART_GLASSES_SCAN_TASK_COMMAND.wait().await == SmartGlassesScanTaskCommand::Stop {
-            //         SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Stopped);
-            //         println!("Stopped");
-
-            //         break;
-            //     }
-            // }
 
 #[task]
 async fn smart_glasses_scan_task() {
