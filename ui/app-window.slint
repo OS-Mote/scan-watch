@@ -104,6 +104,16 @@ export component Counter inherits Rectangle {
     }
 }
 
+export enum SmartGlassesScanTaskCommand {
+    start,
+    stop
+}
+
+export enum SmartGlassesScanTaskState {
+    running,
+    stopped
+}
+
 export enum RemoteIdScanTaskCommand {
     start,
     stop
@@ -125,7 +135,9 @@ export component MainWindow inherits Window {
     out property <bool> showing-settings: false;
     out property <bool> showing-flashlight: false;
     in property <bool> remote-id-detected: false;
-    in-out property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
+    in property <bool> smart-glasses-detected: false;
+    in property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
+    in property <SmartGlassesScanTaskState> smart-glasses-scan-task-state: SmartGlassesScanTaskState.stopped;
 
     pure callback set-date(month: int, day: int, year: int);
     pure callback get-date() -> [int]; // Day, month, years
@@ -139,6 +151,7 @@ export component MainWindow inherits Window {
     pure callback set-screen-timeout(timeout: int);
     pure callback get-screen-timeout() -> int;
     pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
+    pure callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
     callback update-battery-status(percent-charged: int, is-charging: bool);
 
@@ -174,6 +187,25 @@ export component MainWindow inherits Window {
                     ImageButton {
                         icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
                         icon-size: 64px;
+                        clicked => {
+                            if root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped {
+                                root.set-smart-glasses-scan-task-command(SmartGlassesScanTaskCommand.start);
+                            } else if root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running {
+                                root.set-smart-glasses-scan-task-command(SmartGlassesScanTaskCommand.stop);
+                            }
+                        }
+
+                        states [
+                            detected when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running  && root.smart-glasses-detected: {
+                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded-3.png");
+                            }
+                            running when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running && !root.smart-glasses-detected: {
+                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded-2.png");
+                            }
+                            stopped when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped: {
+                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
+                            }
+                        ]
                     }
                     Rectangle {
                         height: parent.height / 3;
@@ -183,9 +215,9 @@ export component MainWindow inherits Window {
                         icon-size: 64px;
                         clicked => {
                             if root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped {
-                                root.set_remote_id_scan_task_command(RemoteIdScanTaskCommand.start);
+                                root.set-remote-id-scan-task-command(RemoteIdScanTaskCommand.start);
                             } else if root.remote-id-scan-task-state == RemoteIdScanTaskState.running {
-                                root.set_remote_id_scan_task_command(RemoteIdScanTaskCommand.stop);
+                                root.set-remote-id-scan-task-command(RemoteIdScanTaskCommand.stop);
                             }
                         }
 

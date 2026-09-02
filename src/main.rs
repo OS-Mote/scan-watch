@@ -13,6 +13,7 @@
 
 extern crate alloc;
 
+use bt_hci::param::DisconnectReason::PairingWithUnitKeyNotSupported;
 use esp_println::println;
 use alloc::{
     boxed::Box,
@@ -76,13 +77,13 @@ use embassy_sync::{
     signal::Signal,
     channel::Channel
 };
-
 use embassy_executor::{
     task,
     Spawner
 };
-
 use embassy_time::{ Timer, Instant };
+use embassy_futures::join::{join, join3};
+use embassy_futures::select::{select, select3, Either};
 use ieee80211::{
     match_frames,
     mgmt_frame::{
@@ -171,6 +172,11 @@ static SETTINGS_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalS
 static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, RemoteIdScanTaskState> = Signal::new();
 static REMOTE_ID_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+
+static SMART_GLASSES_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
+static SMART_GLASSES_SCAN_TASK_STATE: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Signal::new();
+static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
@@ -387,15 +393,20 @@ async fn main(spawner: Spawner) -> ! {
             .num_days_in_month() as i32
     });
 
-    main_window.on_set_remote_id_scan_task_command(move |command| {
+    main_window.on_set_remote_id_scan_task_command(|command| {
         REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
+    });
+
+    main_window.on_set_smart_glasses_scan_task_command(|command| {
+        SMART_GLASSES_SCAN_TASK_COMMAND.signal(command);
     });
 
     spawner.spawn(battery_status_task(power_cell).unwrap());
     spawner.spawn(touch_event_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, settings_cell).unwrap());
-    spawner.spawn(wifi_sniffing_task().unwrap());
+    spawner.spawn(remote_id_sniffing_task().unwrap());
+    spawner.spawn(smart_glasses_scan_task().unwrap());
 
     let mut last_remote_id_detection: Option<Instant> = None;
 
@@ -424,6 +435,10 @@ async fn main(spawner: Spawner) -> ! {
 
                 main_window.set_remote_id_detected(false);
             }
+        }
+
+        if let Some(smart_glasses_scan_task_state) = SMART_GLASSES_SCAN_TASK_STATE.try_take() {
+            main_window.set_smart_glasses_scan_task_state(smart_glasses_scan_task_state);
         }
 
         if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
@@ -577,55 +592,90 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
     }
 }
 
-// const CONNECTIONS_MAX: usize = 1;
-// const L2CAP_CHANNELS_MAX: usize = 4;
+struct BleScanHandler {}
 
-// struct BleScanHandler {}
+impl EventHandler for BleScanHandler {
+    fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        println!("Got BT packet");
+        while let Some(Ok(report)) = it.next() {
+            let mut decoder = AdStructure::decode(report.data);
 
-// impl EventHandler for BleScanHandler {
-//     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
-//         println!("Got BT packet");
-//         while let Some(Ok(report)) = it.next() {
-//             let mut decoder = AdStructure::decode(report.data);
+            while let Some(Ok(structure)) = decoder.next() {
+                if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure {
+                    SMART_GLASSES_DETECTED.signal(Instant::now());
 
-//             while let Some(Ok(structure)) = decoder.next() {
-//                 if let AdStructure::ManufacturerSpecificData{ company_identifier, payload } = structure {
-//                     println!("BT device with manufacturer ID: 0x{:04X}", company_identifier);
-//                 }
-//             }
-//         }
-//     }
-// }
+                    // println!("BT device with manufacturer ID: 0x{:04X}", company_identifier);
+                }
+            }
+        }
+    }
+}
 
-// #[allow(
-//     clippy::large_stack_frames,
-//     reason = "BLE stack is very large."
-// )]
-// #[task]
-// async fn ble_scan_task(bt: BT<'static>) {
-//     let connector = BleConnector::new(bt, Default::default()).unwrap();
-//     let controller: ExternalController<_, 1> = ExternalController::new(connector);
-//     let address = trouble_host::Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
-//     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
-//     let stack = trouble_host::new(controller, &mut resources).set_random_address(address);
-//     let Host {
-//         central,
-//         mut runner,
-//         ..
-//     } = stack.build();
-//     let printer = BleScanHandler {};
-//     let mut scanner = Scanner::new(central);
+const CONNECTIONS_MAX: usize = 1;
+const L2CAP_CHANNELS_MAX: usize = 4;
 
-//     let _ = join(runner.run_with_handler(&printer), async {
-//         scanner.scan(&ScanConfig::default()).await.unwrap();
-//     })
-//     .await;
-// }
+            // loop {
+            //     println!("Running");
+            //     SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Running);
+
+            //     if SMART_GLASSES_SCAN_TASK_COMMAND.wait().await == SmartGlassesScanTaskCommand::Stop {
+            //         SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Stopped);
+            //         println!("Stopped");
+
+            //         break;
+            //     }
+            // }
+
+#[task]
+async fn smart_glasses_scan_task() {
+    loop {
+        if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+            SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Running);
+
+            select(
+                async {
+                    let bluetooth_peripheral = unsafe { BT::steal() };
+
+                    let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
+                    let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
+                    let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
+
+                    let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
+                    let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
+
+                    let Host { central, mut runner, .. } = stack.build();
+                    let mut scanner = Scanner::new(central);
+                    let scan_config = ScanConfig::default();
+
+                    let ble_scan_handler = BleScanHandler{};
+
+                    let _ = join(
+                        runner.run_with_handler(&ble_scan_handler),
+                        scanner.scan(&scan_config)
+                    )
+                        .await;
+                },
+                async {
+                    loop {
+                        if Some(SmartGlassesScanTaskCommand::Stop) == SMART_GLASSES_SCAN_TASK_COMMAND.try_take() {
+                            return;
+                        }
+
+                        Timer::after_millis(16).await;
+                    }
+                }
+            )
+                .await;
+            
+            SMART_GLASSES_SCAN_TASK_STATE.signal(SmartGlassesScanTaskState::Stopped);
+        }
+    }
+}
 
 static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Channel::new();
 
 #[task]
-async fn wifi_sniffing_task() {
+async fn remote_id_sniffing_task() {
     let mut last_wifi_controller: Option<WifiController<'static>> = None;
 
     loop {
