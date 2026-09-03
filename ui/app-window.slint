@@ -150,6 +150,10 @@ export component MainWindow inherits Window {
     pure callback get-screen-brightness() -> int;
     pure callback set-screen-timeout(timeout: int);
     pure callback get-screen-timeout() -> int;
+    pure callback set-smart-glasses-scan-duration(duration: int);
+    pure callback get-smart-glasses-scan-duration() -> int;
+    pure callback set-remote-id-scan-duration(duration: int);
+    pure callback get-remote-id-scan-duration() -> int;
     pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
     pure callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
@@ -343,6 +347,7 @@ export component MainWindow inherits Window {
         out property <bool> showing-timezone: false;
         out property <bool> showing-time: false;
         out property <bool> showing-screen: false;
+        out property <bool> showing-scan-duration: false;
 
         settings-view := VerticalLayout {
             SwipeGestureHandler {
@@ -363,7 +368,10 @@ export component MainWindow inherits Window {
                             height: 96px; text: "Screen";
                             clicked => { showing-screen = !showing-screen; }
                         }
-                        TextButton { height: 96px; text: "Scan Duration"; }
+                        TextButton {
+                            height: 96px; text: "Scan Duration";
+                            clicked => { showing-scan-duration = !showing-scan-duration }
+                        }
                         TextButton { height: 96px; text: "GPS"; }
                         TextButton { height: 96px; text: "Logging"; }
                         TextButton { height: 96px; text: "SD Card"; }
@@ -691,6 +699,79 @@ export component MainWindow inherits Window {
                                 root.set-screen-timeout(round(timeout-slider.value));
 
                                 showing-screen = !showing-screen;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+        if showing-scan-duration : Rectangle {
+            init => {
+                smart-glasses-scan-duration-slider.value = root.get-smart-glasses-scan-duration();
+                remote-id-scan-duration-slider.value = root.get-remote-id-scan-duration();
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Scan Duration";
+                        color: white;
+                        font-size: 64px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text { text: "Smart Glasses"; color: white; }
+                        Text {
+                            text: round(smart-glasses-scan-duration-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    smart-glasses-scan-duration-slider := Slider{
+                        value: 1;
+                        minimum: 1;
+                        maximum: 30;
+                        step: 1;
+                    }
+                    HorizontalLayout {
+                        Text { text: "Remote Id"; color: white; }
+                        Text {
+                            text: round(remote-id-scan-duration-slider.value);
+                            color: white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    remote-id-scan-duration-slider := Slider{
+                        value: 1;
+                        minimum:1;
+                        maximum: 30;
+                        step: 1;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-screen = !showing-screen; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            clicked => {
+                                root.set-smart-glasses-scan-duration(round(smart-glasses-scan-duration-slider.value));
+                                root.set-remote-id-scan-duration(round(remote-id-scan-duration-slider.value));
+
+                                showing-scan-duration = !showing-scan-duration;
                             }
                         }
                     }

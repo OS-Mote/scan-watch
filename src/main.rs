@@ -447,6 +447,30 @@ async fn main(spawner: Spawner) -> ! {
         })
     });
 
+    main_window.on_set_smart_glasses_scan_duration(|duration| {
+        settings_cell.lock(|settings| {
+            settings.borrow_mut().set_smart_glasses_scan_duration(duration as u8);
+        });
+    });
+
+    main_window.on_get_smart_glasses_scan_duration(|| {
+        settings_cell.lock(|settings| {
+            settings.borrow().get_smart_glasses_scan_duration() as i32
+        })
+    });
+
+    main_window.on_set_remote_id_scan_duration(|duration| {
+        settings_cell.lock(|settings| {
+            settings.borrow_mut().set_remote_id_scan_duration(duration as u8);
+        });
+    });
+
+    main_window.on_get_remote_id_scan_duration(|| {
+        settings_cell.lock(|settings| {
+            settings.borrow().get_remote_id_scan_duration() as i32
+        })
+    });
+
     main_window.on_get_days_in_year_month(|year, month| {
         NaiveDate::from_ymd_opt(
             year,
@@ -469,8 +493,8 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(touch_event_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, settings_cell).unwrap());
-    spawner.spawn(remote_id_sniffing_task().unwrap());
-    spawner.spawn(smart_glasses_scan_task().unwrap());
+    spawner.spawn(remote_id_sniffing_task(settings_cell).unwrap());
+    spawner.spawn(smart_glasses_scan_task(settings_cell).unwrap());
 
     let mut last_smart_glasses_detection: Option<Instant> = None;
     let mut last_remote_id_detection: Option<Instant> = None;
@@ -718,92 +742,134 @@ const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 4;
 
 #[task]
-async fn smart_glasses_scan_task() {
-    loop {
-        if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
-            *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Running;
+async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+    join(
+        async {
+            loop {
+                if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+                    select(
+                        async {
+                            let bluetooth_peripheral = unsafe { BT::steal() };
 
-            select(
-                async {
-                    let bluetooth_peripheral = unsafe { BT::steal() };
+                            let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
+                            let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
+                            let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
 
-                    let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
-                    let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-                    let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
+                            let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
+                            let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
-                    let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
-                    let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
+                            let Host { central, mut runner, .. } = stack.build();
+                            let mut scanner = Scanner::new(central);
+                            let scan_config = ScanConfig::default();
+                            let ble_scan_handler = SmartGlassesScanHandler{};
 
-                    let Host { central, mut runner, .. } = stack.build();
-                    let mut scanner = Scanner::new(central);
-                    let scan_config = ScanConfig::default();
-                    let ble_scan_handler = SmartGlassesScanHandler{};
+                            *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Running;
 
-                    let _ = join(
-                        runner.run_with_handler(&ble_scan_handler),
-                        scanner.scan(&scan_config)
+                            let _ = join(
+                                runner.run_with_handler(&ble_scan_handler),
+                                scanner.scan(&scan_config)
+                            )
+                                .await;
+                        },
+                        async {
+                            loop {
+                                if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+                                    return;
+                                }
+                            }
+                        }
                     )
                         .await;
-                },
-                async {
-                    loop {
-                        if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
-                            return;
-                        }
+                    
+                    *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Stopped;
+                }
+            }
+        },
+        async {
+            loop {
+                if *SMART_GLASSES_SCAN_TASK_STATE.lock().await == SmartGlassesScanTaskState::Running {
+                    let duration = settings_cell.lock(|settings| {
+                        settings.borrow().get_smart_glasses_scan_duration()
+                    }) as u64;
+
+                    Timer::after_secs(duration).await;
+
+                    if *SMART_GLASSES_SCAN_TASK_STATE.lock().await == SmartGlassesScanTaskState::Running {
+                        SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
                     }
                 }
-            )
-                .await;
-            
-            *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Stopped;
+
+                Timer::after_millis(16).await;
+            }
         }
-    }
+    ).await;
 }
 
 static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Channel::new();
 
 #[task]
-async fn remote_id_sniffing_task() {
-    loop {
-        match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
-            RemoteIdScanTaskCommand::Start => {
-                let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
+async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+    join(
+        async {
+            loop {
+                match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
+                    RemoteIdScanTaskCommand::Start => {
+                        let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
 
-                let (wifi_controller, wifi_interfaces) = esp_radio::wifi::new(
-                    wifi_peripheral, 
-                    Default::default()
-                )
-                    .unwrap();
+                        let (wifi_controller, wifi_interfaces) = esp_radio::wifi::new(
+                            wifi_peripheral, 
+                            Default::default()
+                        )
+                            .unwrap();
 
-                let mut wifi_sniffer = wifi_interfaces.sniffer;
+                        let mut wifi_sniffer = wifi_interfaces.sniffer;
 
-                wifi_sniffer.set_receive_cb(|packet| {
-                    let _ = match_frames! {
-                        packet.data,
-                        beacon = BeaconFrame => {
-                            for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
-                                if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
-                                    REMOTE_ID_DETECTED.signal(Instant::now());
+                        wifi_sniffer.set_receive_cb(|packet| {
+                            let _ = match_frames! {
+                                packet.data,
+                                beacon = BeaconFrame => {
+                                    for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
+                                        if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
+                                            REMOTE_ID_DETECTED.signal(Instant::now());
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                        action = RawActionFrame => {
-                            if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
-                                REMOTE_ID_DETECTED.signal(Instant::now());
-                            }
-                        }
-                    };
-                });
+                                action = RawActionFrame => {
+                                    if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
+                                        REMOTE_ID_DETECTED.signal(Instant::now());
+                                    }
+                                }
+                            };
+                        });
 
-                let _ = wifi_sniffer.set_promiscuous_mode(true);
+                        let _ = wifi_sniffer.set_promiscuous_mode(true);
 
-                *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;
+                        *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;    
+                    }
+                    RemoteIdScanTaskCommand::Stop => {
+                        *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
+                    }
+                }
             }
-            RemoteIdScanTaskCommand::Stop => {
-                *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
+        },
+        async {
+            loop {
+                if *REMOTE_ID_SCAN_TASK_STATE.lock().await == RemoteIdScanTaskState::Running {
+                    let duration = settings_cell.lock(|settings| {
+                        settings.borrow().get_remote_id_scan_duration()
+                    }) as u64;
+
+                    Timer::after_secs(duration).await;
+
+                    if *REMOTE_ID_SCAN_TASK_STATE.lock().await == RemoteIdScanTaskState::Running {
+                        REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
+                    }
+                }
+
+                Timer::after_millis(16).await;
             }
         }
-    }
+    ).await;
 }
 
 fn get_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>) -> DateTime<FixedOffset> {

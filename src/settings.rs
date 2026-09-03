@@ -24,6 +24,10 @@ const TIMESTAMP_SETTINGS_KEY: &str = "timest";
 const TIMESTAMP_DEFAULT: i64 = 0;
 const TIMESTAMP_OFFSET_SETTINGS_KEY: &str = "timest-off";
 const TIMESTAMP_OFFSET_DEFAULT: u64 = 0;
+const SMART_GLASSES_SCAN_DURATION_SETTINGS_KEY: &str = "smrt-dur";
+const SMART_GLASSES_SCAN_DURATION_DEFAULT: u8 = 10;
+const REMOTE_ID_SCAN_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
+const REMOTE_ID_SCAN_DURATION_DEFAULT: u8 = 10;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,
@@ -31,7 +35,9 @@ pub struct Settings<S: 'static> {
     display_timeout: u8,
     timezone_offset: i32,
     timestamp: i64,
-    timestamp_offset: u64
+    timestamp_offset: u64,
+    smart_glasses_scan_duration: u8,
+    remote_id_scan_duration: u8,
 }
 
 impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
@@ -42,7 +48,9 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             display_timeout: DISPLAY_TIMEOUT_DEFAULT,
             timezone_offset: TIMEZONE_OFFSET_DEFAULT,
             timestamp: TIMESTAMP_DEFAULT,
-            timestamp_offset: TIMESTAMP_OFFSET_DEFAULT
+            timestamp_offset: TIMESTAMP_OFFSET_DEFAULT,
+            smart_glasses_scan_duration: SMART_GLASSES_SCAN_DURATION_DEFAULT,
+            remote_id_scan_duration: REMOTE_ID_SCAN_DURATION_DEFAULT,
         }
     }
 
@@ -124,5 +132,29 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
 
     pub fn get_timestamp_offset(&self) -> u64 {
         self.timestamp_offset
+    }
+
+    pub fn set_smart_glasses_scan_duration(&mut self, scan_duration: u8) {
+        critical_section::with(|cs| {
+            if self.storage.borrow(cs).borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(SMART_GLASSES_SCAN_DURATION_SETTINGS_KEY), scan_duration).is_ok() {
+                self.smart_glasses_scan_duration = scan_duration;
+            }
+        });
+    }
+
+    pub fn get_smart_glasses_scan_duration(&self) -> u8 {
+        self.smart_glasses_scan_duration
+    }
+
+    pub fn set_remote_id_scan_duration(&mut self, scan_duration: u8) {
+        critical_section::with(|cs| {
+            if self.storage.borrow(cs).borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(REMOTE_ID_SCAN_DURATION_SETTINGS_KEY), scan_duration).is_ok() {
+                self.remote_id_scan_duration = scan_duration;
+            }
+        });
+    }
+
+    pub fn get_remote_id_scan_duration(&self) -> u8 {
+        self.remote_id_scan_duration
     }
 }
