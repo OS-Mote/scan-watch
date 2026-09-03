@@ -211,8 +211,8 @@ static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal
 
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
-static BATTERY_STATUS: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
-static DATE_TIME: Mutex<CriticalSectionRawMutex, Option<DateTime<FixedOffset>>> = Mutex::new(None);
+static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
+static DATE_TIME_UPDATED: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -544,9 +544,7 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
 
-        if let Ok(date_time) = DATE_TIME.try_lock() {
-            let date_time = date_time.unwrap_or(DateTime::UNIX_EPOCH.fixed_offset());
-
+        if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
             main_window.invoke_update_datetime(
                 date_time.hour() as i32,
                 date_time.minute() as i32,
@@ -558,7 +556,7 @@ async fn main(spawner: Spawner) -> ! {
             );
         }
 
-        if let Ok(battery_status) = BATTERY_STATUS.try_lock() {
+        if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
             main_window.invoke_update_battery_status(
                 battery_status.0 as i32, // Battery charge percentage
                 battery_status.1 // Is charging
@@ -628,7 +626,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
         });
 
         if date_time != last_date_time {
-            *DATE_TIME.lock().await = Some(date_time);
+            DATE_TIME_UPDATED.signal(date_time);
 
             last_date_time = date_time;
         }
@@ -673,7 +671,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 
         // Signal the UI with the battery level and charge state
         if battery_status != last_battery_status {
-            *BATTERY_STATUS.lock().await = battery_status;
+            BATTERY_STATUS_UPDATED.signal(battery_status);
 
             last_battery_status = battery_status;
         }
