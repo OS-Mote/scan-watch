@@ -25,9 +25,9 @@ const TIMESTAMP_DEFAULT: i64 = 0;
 const TIMESTAMP_OFFSET_SETTINGS_KEY: &str = "timest-off";
 const TIMESTAMP_OFFSET_DEFAULT: u64 = 0;
 const SMART_GLASSES_SCAN_DURATION_SETTINGS_KEY: &str = "smrt-dur";
-const SMART_GLASSES_SCAN_DURATION_DEFAULT: u8 = 10;
+const SMART_GLASSES_SCAN_DURATION_DEFAULT: u8 = 30;
 const REMOTE_ID_SCAN_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
-const REMOTE_ID_SCAN_DURATION_DEFAULT: u8 = 10;
+const REMOTE_ID_SCAN_DURATION_DEFAULT: u8 = 30;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,

@@ -78,10 +78,8 @@ use esp_nvs::{
     Key
 };
 use esp_radio::{
-    ble::controller::BleConnector,
-    wifi::{
-        WifiController,
-        sniffer::Sniffer
+    ble::controller::BleConnector, wifi::{
+        self, SecondaryChannel, WifiController, sniffer::Sniffer
     }
 };
 use embassy_sync::{
@@ -103,6 +101,7 @@ use embassy_time::{
 };
 use embassy_futures::{
     join::join,
+    join::join3,
     select::select
 };
 use ieee80211::{
@@ -189,7 +188,7 @@ impl slint::platform::Platform for EmbassySlintPlatform {
     }
 }
 
-const SLEEP_BATTERY_PERCENT: u8 = 5;
+const SLEEP_BATTERY_PERCENTAGE: u8 = 5;
 const SLEEP_SECONDS_FOR_CHARING: u64 = 10;
 
 static RTC_CELL: StaticCell<CriticalSectionMutex<RefCell<Rtc<'static>>>> = StaticCell::new();
@@ -263,7 +262,7 @@ async fn main(spawner: Spawner) -> ! {
     // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
     // Otherwise set the local timestamp from RTC and reset the timestamp offset.
     if let SleepSource::Timer = wakeup_cause() {
-        if power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENT {
+        if power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
             rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
         } else {
             settings.set_timestamp(rtc.current_time_us() as i64);
@@ -558,7 +557,7 @@ async fn main(spawner: Spawner) -> ! {
 
         if let Ok(battery_status) = BATTERY_STATUS.try_lock() {
             main_window.invoke_update_battery_status(
-                battery_status.0 as i32, // Percentage
+                battery_status.0 as i32, // Battery charge percentage
                 battery_status.1 // Is charging
             );
         }
@@ -648,13 +647,13 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
             (
                 power.get_battery_percent().unwrap_or(0),
 
-                // is_charging() has a bug, use vbus and voltage
+                // is_charging() has a bug, use vbus and voltage to determine charging status.
                 power.is_vbus_in().unwrap_or(false) && power.get_battery_voltage().unwrap_or(0) < 4150
             )
         });
 
         // Graceful shutdown if battery has SLEEP_BATTERY_PERCENT charge or less.
-        if battery_status.0 <= SLEEP_BATTERY_PERCENT {
+        if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
             SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
             REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
 
@@ -788,11 +787,11 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
         async {
             loop {
                 if *SMART_GLASSES_SCAN_TASK_STATE.lock().await == SmartGlassesScanTaskState::Running {
-                    let duration = settings_cell.lock(|settings| {
+                    let scan_duration = settings_cell.lock(|settings| {
                         settings.borrow().get_smart_glasses_scan_duration()
                     }) as u64;
 
-                    Timer::after_secs(duration).await;
+                    Timer::after_secs(scan_duration).await;
 
                     if *SMART_GLASSES_SCAN_TASK_STATE.lock().await == SmartGlassesScanTaskState::Running {
                         SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
@@ -809,7 +808,11 @@ static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Ch
 
 #[task]
 async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
-    join(
+    let last_wifi_controller_mutex: Mutex<CriticalSectionRawMutex, Option<WifiController>> = Mutex::new(None);
+    // let foo: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
+    let mut wifi_channel_mutex: Mutex<CriticalSectionRawMutex, u8> = Mutex::new(1);
+
+    join3(
         async {
             loop {
                 match REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
@@ -844,9 +847,13 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
 
                         let _ = wifi_sniffer.set_promiscuous_mode(true);
 
-                        *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;    
+                        last_wifi_controller_mutex.lock().await.replace(wifi_controller);
+
+                        *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;
                     }
                     RemoteIdScanTaskCommand::Stop => {
+                        *last_wifi_controller_mutex.lock().await = None;
+                        *wifi_channel_mutex.lock().await = 1;
                         *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
                     }
                 }
@@ -855,11 +862,11 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
         async {
             loop {
                 if *REMOTE_ID_SCAN_TASK_STATE.lock().await == RemoteIdScanTaskState::Running {
-                    let duration = settings_cell.lock(|settings| {
+                    let scan_duration = settings_cell.lock(|settings| {
                         settings.borrow().get_remote_id_scan_duration()
                     }) as u64;
 
-                    Timer::after_secs(duration).await;
+                    Timer::after_secs(scan_duration).await;
 
                     if *REMOTE_ID_SCAN_TASK_STATE.lock().await == RemoteIdScanTaskState::Running {
                         REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
@@ -867,6 +874,19 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                 }
 
                 Timer::after_millis(16).await;
+            }
+        },
+        async {
+            loop {
+                if let Some(wifi_controller) = last_wifi_controller_mutex.lock().await.as_mut() {
+                    let mut wifi_channel = wifi_channel_mutex.lock().await;
+
+                    let _ = wifi_controller.set_channel(*wifi_channel, SecondaryChannel::None);
+
+                    if *wifi_channel == 14 { *wifi_channel = 1 } else { *wifi_channel += 1 };
+                }
+
+                Timer::after_secs(1).await;
             }
         }
     ).await;
