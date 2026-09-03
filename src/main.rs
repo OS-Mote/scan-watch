@@ -810,7 +810,7 @@ static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Ch
 async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let last_wifi_controller_mutex: Mutex<CriticalSectionRawMutex, Option<WifiController>> = Mutex::new(None);
     // let foo: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
-    let mut wifi_channel_mutex: Mutex<CriticalSectionRawMutex, u8> = Mutex::new(1);
+    let wifi_channel_mutex: Mutex<CriticalSectionRawMutex, u8> = Mutex::new(1);
 
     join3(
         async {
