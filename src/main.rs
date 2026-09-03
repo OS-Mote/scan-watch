@@ -620,7 +620,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
                 let mut rtc = rtc.borrow_mut();
 
                 rtc.set_current_time_us(date_time.timestamp_micros() as u64);
-                // rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(10))]);
+                rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(10))]);
             });
         }
 
