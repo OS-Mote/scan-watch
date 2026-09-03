@@ -489,7 +489,7 @@ async fn main(spawner: Spawner) -> ! {
         SMART_GLASSES_SCAN_TASK_COMMAND.signal(command);
     });
 
-    spawner.spawn(battery_status_task(power_cell, display_cell, rtc_cell, settings_cell).unwrap());
+    spawner.spawn(battery_status_task(power_cell, rtc_cell, settings_cell).unwrap());
     spawner.spawn(touch_event_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, settings_cell).unwrap());
@@ -638,7 +638,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
 use core::time::Duration;
 
 #[task]
-async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>, display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, rtc_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>, rtc_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_battery_status: (u8, bool) = (0, false);
 
     loop {

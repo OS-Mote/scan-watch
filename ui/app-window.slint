@@ -671,7 +671,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         Text { text: "Timeout"; color: white; }
                         Text {
-                            text: round(timeout-slider.value);
+                            text: round(timeout-slider.value) + " secs";
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
