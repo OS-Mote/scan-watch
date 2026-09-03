@@ -379,11 +379,11 @@ async fn main(spawner: Spawner) -> ! {
 
         let adjusted_datetime = date_time
             .with_hour(hour as u32)
-            .unwrap()
+            .unwrap_or_default()
             .with_minute(minute as u32)
-            .unwrap()
+            .unwrap_or_default()
             .with_second(second as u32)
-            .unwrap()
+            .unwrap_or_default()
             .to_utc();
 
         settings_cell.lock(|settings| {
@@ -479,7 +479,7 @@ async fn main(spawner: Spawner) -> ! {
             month as u32,
             1,
         )
-            .unwrap()
+            .unwrap_or_default()
             .num_days_in_month() as i32
     });
 
