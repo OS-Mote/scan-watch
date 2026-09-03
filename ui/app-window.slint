@@ -719,7 +719,7 @@ export component MainWindow inherits Window {
             TouchArea {
                 VerticalLayout {
                     Text {
-                        text: "Scan Duration";
+                        text: "Duration";
                         color: white;
                         font-size: 64px;
                         vertical-alignment: top;
@@ -729,7 +729,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         Text { text: "Smart Glasses"; color: white; }
                         Text {
-                            text: round(smart-glasses-scan-duration-slider.value);
+                            text: round(smart-glasses-scan-duration-slider.value) + " secs";
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
@@ -737,15 +737,15 @@ export component MainWindow inherits Window {
                         }
                     }
                     smart-glasses-scan-duration-slider := Slider{
-                        value: 1;
-                        minimum: 1;
+                        value: 5;
+                        minimum: 5;
                         maximum: 30;
                         step: 1;
                     }
                     HorizontalLayout {
                         Text { text: "Remote Id"; color: white; }
                         Text {
-                            text: round(remote-id-scan-duration-slider.value);
+                            text: round(remote-id-scan-duration-slider.value) + " secs";
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
@@ -753,8 +753,8 @@ export component MainWindow inherits Window {
                         }
                     }
                     remote-id-scan-duration-slider := Slider{
-                        value: 1;
-                        minimum:1;
+                        value: 5;
+                        minimum:5;
                         maximum: 30;
                         step: 1;
                     }
