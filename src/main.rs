@@ -65,12 +65,10 @@ use esp_radio::{
         sniffer::Sniffer
     }
 };
-
-
-use embassy_sync::{blocking_mutex, mutex};
-
 use embassy_sync::{
+    blocking_mutex,
     blocking_mutex::CriticalSectionMutex,
+    mutex,
     mutex::Mutex,
     blocking_mutex::raw::CriticalSectionRawMutex,
     signal::Signal,
@@ -183,8 +181,8 @@ static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal
 
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
-static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
-static DATE_TIME_UPDATED: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
+static BATTERY_STATUS: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
+static DATE_TIME: Mutex<CriticalSectionRawMutex, Option<DateTime<FixedOffset>>> = Mutex::new(None);
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -460,7 +458,9 @@ async fn main(spawner: Spawner) -> ! {
 
         // Fixme
 
-        main_window.set_remote_id_scan_task_state(*REMOTE_ID_SCAN_TASK_STATE.lock().await);
+        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE.try_lock() {
+            main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
+        }
 
         if let Some(remote_id_detected) = REMOTE_ID_DETECTED.try_take() {
             last_remote_id_detection = Some(remote_id_detected);
@@ -473,8 +473,10 @@ async fn main(spawner: Spawner) -> ! {
                 main_window.set_remote_id_detected(false);
             }
         }
-        
-        main_window.set_smart_glasses_scan_task_state(*SMART_GLASSES_SCAN_TASK_STATE.lock().await);
+
+        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SCAN_TASK_STATE.try_lock() {
+            main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
+        }
 
         if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED.try_take() {
             last_smart_glasses_detection = Some(smart_glasses_detected);
@@ -488,7 +490,9 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
 
-        if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
+        if let Ok(date_time) = DATE_TIME.try_lock() {
+            let date_time = date_time.unwrap_or(DateTime::UNIX_EPOCH.fixed_offset());
+
             main_window.invoke_update_datetime(
                 date_time.hour() as i32,
                 date_time.minute() as i32,
@@ -500,7 +504,7 @@ async fn main(spawner: Spawner) -> ! {
             );
         }
 
-        if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
+        if let Ok(battery_status) = BATTERY_STATUS.try_lock() {
             main_window.invoke_update_battery_status(
                 battery_status.0 as i32, // Percentage
                 battery_status.1 // Is charging
@@ -510,10 +514,8 @@ async fn main(spawner: Spawner) -> ! {
         if software_window.draw_if_needed(|renderer| {
             renderer.render(framebuffer.as_rgb565_pixels_mut(), LCD_WIDTH as usize);
         }) {
-            critical_section::with(|cs| {
-                let mut display = display_cell.borrow(cs).borrow_mut();
-        
-                framebuffer.flush_vsync(&mut display, &te_pin);
+            display_cell.lock(|display| {
+                framebuffer.flush_vsync(&mut display.borrow_mut(), &te_pin);
             });
         }
 
@@ -572,7 +574,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
         });
 
         if date_time != last_date_time {
-            DATE_TIME_UPDATED.signal(date_time);
+            *DATE_TIME.lock().await = Some(date_time);
 
             last_date_time = date_time;
         }
@@ -629,7 +631,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 
         // Signal the UI with the battery level and charge state
         if battery_status != last_battery_status {
-            BATTERY_STATUS_UPDATED.signal(battery_status);
+            *BATTERY_STATUS.lock().await = battery_status;
 
             last_battery_status = battery_status;
         }
