@@ -233,6 +233,9 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut settings = Settings::new(flash_storage_cell).init();
 
+    // If we woke up on a timer, check the battery charge.
+    // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
+    // Otherwise set the local timestamp from RTC and reset the timestamp offset.
     if let SleepSource::Timer = wakeup_cause() {
         if power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENT {
             rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
