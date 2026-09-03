@@ -209,7 +209,7 @@ static SMART_GLASSES_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, SmartGla
 static SMART_GLASSES_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
 static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 
-static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
 static DATE_TIME: Mutex<CriticalSectionRawMutex, Option<DateTime<FixedOffset>>> = Mutex::new(None);
@@ -582,11 +582,11 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
     let mut last_touch_point: Option<TouchPoint> = None;
 
     loop {
-        if let Ok(touches) = critical_section::with(|cs| {
-            touch_cell.borrow(cs).borrow_mut().touches()
+        if let Ok(touches) = touch_cell.lock(|touch| {
+            touch.borrow_mut().touches()
         }) {
             if let Some(Some(touch_point)) = touches.first() { // We only care about one-finger touches
-                DISPLAY_TOUCHED.signal(());
+                DISPLAY_TOUCHED.signal(Instant::now());
 
                 DISPLAY_TOUCH_EVENT_UPDATED.signal(
                     if last_touch_point.is_some(){
@@ -623,8 +623,8 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
     let mut last_date_time = DateTime::UNIX_EPOCH.fixed_offset();
 
     loop {
-        let date_time = critical_section::with(|cs| {
-            get_date_time(&settings_cell.borrow(cs).borrow())
+        let date_time = settings_cell.lock(|settings| {
+            get_date_time(&settings.borrow())
         });
 
         if date_time != last_date_time {
@@ -665,6 +665,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
             rtc_cell.lock(|rtc| {
                 let mut rtc = rtc.borrow_mut();
 
+                // Update the RTC with the current time.
                 rtc.set_current_time_us(date_time.timestamp_micros() as u64);
                 rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(10))]);
             });
@@ -683,12 +684,12 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
-    let mut last_touch = Instant::now();
+    let mut last_touch_instant = Instant::now();
     let mut display_on: bool = true;
 
     loop {
-        if DISPLAY_TOUCHED.try_take().is_some() {
-            last_touch = Instant::now();
+        if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
+            last_touch_instant = touch_instant;
 
             if !display_on {
                 display_cell.lock(|display| {
@@ -702,7 +703,7 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
                 settings.borrow().get_display_timeout()
             });
 
-            if Instant::now().duration_since(last_touch).as_secs() > display_timeout as u64 && display_on {
+            if Instant::now().duration_since(last_touch_instant).as_secs() > display_timeout as u64 && display_on {
                 display_cell.lock(|display| {
                     display.borrow_mut().display_off();
                 });
