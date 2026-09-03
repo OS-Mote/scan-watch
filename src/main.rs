@@ -13,7 +13,6 @@
 
 extern crate alloc;
 
-use bt_hci::param::DisconnectReason::PairingWithUnitKeyNotSupported;
 use esp_println::println;
 use alloc::{
     boxed::Box,
@@ -30,28 +29,48 @@ use chrono::{
     Timelike
 };
 use esp_hal::{
-    delay::Delay, dma::{
+    delay::Delay,
+    dma::{
         DmaRxBuf,
         DmaTxBuf
-    }, dma_buffers, gpio::{
-        AnyPin, Input, InputConfig, Level, Output, OutputConfig
-    }, i2c::master::{
+    },
+    dma_buffers,
+    gpio::{
+        AnyPin,
+        Input,
+        InputConfig,
+        Level,
+        Output,
+        OutputConfig
+    },
+    i2c::master::{
         Config as I2cConfig,
         I2c
-    }, peripherals::BT, rtc_cntl::{
-        Rtc, SocResetReason, sleep::{
-            Ext0WakeupSource, TimerWakeupSource, WakeupLevel
+    },
+    peripherals::BT,
+    rtc_cntl::{
+        Rtc,
+        SocResetReason,
+        sleep::{
+            Ext0WakeupSource,
+            TimerWakeupSource,
+            WakeupLevel
         },
-        
-    }, spi::{
+    },
+    spi::{
         Mode as SpiMode,
         master::{
             Config as SpiConfig,
             Spi
         }
-    }, system::{
-        SleepSource, reset_reason, wakeup_cause
-    }, time::Rate, timer::timg::TimerGroup,
+    },
+    system::{
+        SleepSource,
+        reset_reason,
+        wakeup_cause
+    },
+    time::Rate,
+    timer::timg::TimerGroup,
 };
 use esp_storage::FlashStorage;
 use esp_nvs::{
@@ -78,9 +97,14 @@ use embassy_executor::{
     task,
     Spawner
 };
-use embassy_time::{ Timer, Instant };
-use embassy_futures::join::{join, join3};
-use embassy_futures::select::{select, select3, Either};
+use embassy_time::{
+    Timer,
+    Instant
+};
+use embassy_futures::{
+    join::join,
+    select::select
+};
 use ieee80211::{
     match_frames,
     mgmt_frame::{
@@ -108,7 +132,11 @@ use slint::{
     }
 };
 
-use cst92xx::{BlockingCST92xx, Point as TouchPoint};
+use cst92xx::{
+    BlockingCST92xx,
+    Point as TouchPoint
+};
+
 use esp_hal::gpio::Pull;
 mod qspi_bus;
 mod framebuffer;
@@ -606,17 +634,6 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
             SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
             REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
 
-            loop {
-                if
-                *SMART_GLASSES_SCAN_TASK_STATE.lock().await == SmartGlassesScanTaskState::Stopped && 
-                *REMOTE_ID_SCAN_TASK_STATE.lock().await == RemoteIdScanTaskState::Stopped
-                {
-                    break;
-                }
-
-                Timer::after_micros(16).await;
-            }
-
             let date_time = settings_cell.lock(|settings| {
                 get_date_time(&settings.borrow_mut())
             });
@@ -730,11 +747,9 @@ async fn smart_glasses_scan_task() {
                 },
                 async {
                     loop {
-                        if Some(SmartGlassesScanTaskCommand::Stop) == SMART_GLASSES_SCAN_TASK_COMMAND.try_take() {
+                        if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
                             return;
                         }
-
-                        Timer::after_millis(16).await;
                     }
                 }
             )
