@@ -112,7 +112,10 @@ use ieee80211::{
     },
     elements::VendorSpecificElement
 };
-use core::cell::RefCell;
+use core::{
+    cell::RefCell,
+    time::Duration,
+};
 use embedded_hal_bus::i2c::RefCellDevice;
 use embedded_graphics::{
     pixelcolor::Rgb565, prelude::*
@@ -634,8 +637,6 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
     }
 }
 
-use core::time::Duration;
-
 #[task]
 async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>, rtc_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_battery_status: (u8, bool) = (0, false);
@@ -809,7 +810,6 @@ static REMOTE_ID_PACKET_CHANNEL: Channel<CriticalSectionRawMutex, &[u8], 8> = Ch
 #[task]
 async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let last_wifi_controller_mutex: Mutex<CriticalSectionRawMutex, Option<WifiController>> = Mutex::new(None);
-    // let foo: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
     let wifi_channel_mutex: Mutex<CriticalSectionRawMutex, u8> = Mutex::new(1);
 
     join3(
