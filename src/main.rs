@@ -503,6 +503,22 @@ async fn main(spawner: Spawner) -> ! {
     // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
         if let Ok(mut flashlight) = FLASHLIGHT_ON.try_lock() {
+            // If the flashlight is on..
+            if on {
+                display_cell.lock(|display| {
+                    // Set the display brightness to maximum.
+                    display.borrow_mut().set_brightness(255);
+                });
+            // Else if the flashlight is off..
+            } else {
+                display_cell.lock(|display| {
+                    settings_cell.lock(|settings| {
+                        // Set the display brightness to the settings value.
+                        display.borrow_mut().set_brightness(settings.borrow().get_display_brightness());
+                    });
+                });
+            }
+
             *flashlight = on;
         }
     });
