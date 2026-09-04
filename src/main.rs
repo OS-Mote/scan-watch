@@ -705,17 +705,23 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
     let mut last_touch_instant = Instant::now();
 
     loop {
+        // If the display has been touched..
         if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
             last_touch_instant = touch_instant;
 
             let mut display_on = DISPLAY_ON.lock().await;
 
+            // And the display is not on..
             if !*display_on {
                 display_cell.lock(|display| {
+                    // Turn on the display..
                     display.borrow_mut().display_on();
-                    *display_on = true
                 });
+
+                // Set the display on flag.
+                *display_on = true
             }
+        // Else start the display time-out countdown if the flashlight is not on.
         } else if !*FLASHLIGHT_ON.lock().await {
             let display_timeout = settings_cell.lock(|settings| {
                 settings.borrow().get_display_timeout()
@@ -723,11 +729,14 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
 
             let mut display_on = DISPLAY_ON.lock().await;
 
-            if Instant::now().duration_since(last_touch_instant).as_secs() > display_timeout as u64 && *display_on {
+            // If the display has been on longer or equal to the display timeout setting and the display is on..
+            if Instant::now().duration_since(last_touch_instant).as_secs() >= display_timeout as u64 && *display_on {
                 display_cell.lock(|display| {
+                    // Turn off the display..
                     display.borrow_mut().display_off();
                 });
 
+                // And set the display on flag.
                 *display_on = false;
             }
         }
