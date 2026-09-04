@@ -158,9 +158,6 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 slint::include_modules!();
 
-const XL9555_I2C_ADDR: u8 = 0x20;
-const CST226_I2C_ADDR: u8 = 0x5A;
-
 struct EmbassySlintPlatform {
     window: alloc::rc::Rc<MinimalSoftwareWindow>,
 }
