@@ -140,24 +140,25 @@ export component MainWindow inherits Window {
     in property <SmartGlassesScanTaskState> smart-glasses-scan-task-state: SmartGlassesScanTaskState.stopped;
 
     pure callback set-date(month: int, day: int, year: int);
-    pure callback get-date() -> [int]; // Day, month, years
+    callback get-date() -> [int]; // Day, month, years
     pure callback set-time(hour: int, minute: int, second: int);
-    pure callback get-time() -> [int]; // Hour, minute, second
+    callback get-time() -> [int]; // Hour, minute, second
     pure callback set-timezone-offset(offset: int);
-    pure callback get-timezone-offset() -> int;
-    pure callback get-days-in-year-month(year: int, month: int) -> int;
+    callback get-timezone-offset() -> int;
+    callback get-days-in-year-month(year: int, month: int) -> int;
     pure callback set-screen-brightness(brightness: int);
-    pure callback get-screen-brightness() -> int;
+    callback get-screen-brightness() -> int;
     pure callback set-screen-timeout(timeout: int);
-    pure callback get-screen-timeout() -> int;
+    callback get-screen-timeout() -> int;
     pure callback set-smart-glasses-scan-duration(duration: int);
-    pure callback get-smart-glasses-scan-duration() -> int;
+    callback get-smart-glasses-scan-duration() -> int;
     pure callback set-remote-id-scan-duration(duration: int);
-    pure callback get-remote-id-scan-duration() -> int;
+    callback get-remote-id-scan-duration() -> int;
     pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
     pure callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
     callback update-battery-status(percent-charged: int, is-charging: bool);
+    pure callback set-flashlight-on(bool);
 
     update-datetime(hour, minute, second, day, month, year, day-of-week) => {
         root.hour = hour;
@@ -329,6 +330,9 @@ export component MainWindow inherits Window {
     }
 
     if showing-flashlight : Rectangle {
+        init => {
+            root.set-flashlight-on(true);
+        }
         SwipeGestureHandler {
             Rectangle {
                 background: white;
@@ -336,6 +340,8 @@ export component MainWindow inherits Window {
 
             swiped => {
                 showing-flashlight = false;
+
+                root.set-flashlight-on(false);
             }
 
             handle-swipe-left: true;

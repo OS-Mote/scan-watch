@@ -29,26 +29,20 @@ use chrono::{
     Timelike
 };
 use esp_hal::{
-    delay::Delay,
-    dma::{
+    delay::Delay, dma::{
         DmaRxBuf,
         DmaTxBuf
-    },
-    dma_buffers,
-    gpio::{
+    }, dma_buffers, gpio::{
         AnyPin,
         Input,
         InputConfig,
         Level,
         Output,
         OutputConfig
-    },
-    i2c::master::{
+    }, i2c::master::{
         Config as I2cConfig,
         I2c
-    },
-    peripherals::BT,
-    rtc_cntl::{
+    }, peripherals::{BT, FLASH}, rtc_cntl::{
         Rtc,
         SocResetReason,
         sleep::{
@@ -56,21 +50,17 @@ use esp_hal::{
             TimerWakeupSource,
             WakeupLevel
         },
-    },
-    spi::{
+    }, spi::{
         Mode as SpiMode,
         master::{
             Config as SpiConfig,
             Spi
         }
-    },
-    system::{
+    }, system::{
         SleepSource,
         reset_reason,
         wakeup_cause
-    },
-    time::Rate,
-    timer::timg::TimerGroup,
+    }, time::Rate, timer::timg::TimerGroup,
 };
 use esp_storage::FlashStorage;
 use esp_nvs::{
@@ -209,6 +199,8 @@ static SMART_GLASSES_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, SmartGla
 static SMART_GLASSES_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
 static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 
+static FLASHLIGHT_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
+static DISPLAY_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
@@ -411,7 +403,6 @@ async fn main(spawner: Spawner) -> ! {
     main_window.on_set_timezone_offset(|offset| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_timezone_offset(offset);
-
         });
     });
 
@@ -491,6 +482,12 @@ async fn main(spawner: Spawner) -> ! {
         SMART_GLASSES_SCAN_TASK_COMMAND.signal(command);
     });
 
+    main_window.on_set_flashlight_on(|on| {
+        if let Ok(mut flashlight) = FLASHLIGHT_ON.try_lock() {
+            *flashlight = on;
+        }
+    });
+
     spawner.spawn(battery_status_task(power_cell, rtc_cell, settings_cell).unwrap());
     spawner.spawn(touch_event_update_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_cell).unwrap());
@@ -504,7 +501,12 @@ async fn main(spawner: Spawner) -> ! {
     main_window.show().unwrap();
 
     loop {
+        Timer::after_millis(16).await;
+
         slint::platform::update_timers_and_animations();
+
+        // Don't render a frame if the display is off
+        if !*DISPLAY_ON.lock().await { continue; }
 
         if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
             software_window.dispatch_event(touch_event);
@@ -570,8 +572,6 @@ async fn main(spawner: Spawner) -> ! {
                 framebuffer.flush_vsync(&mut display.borrow_mut(), &te_pin);
             });
         }
-
-        Timer::after_millis(16).await;
     }
 }
 
@@ -583,7 +583,8 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
         if let Ok(touches) = touch_cell.lock(|touch| {
             touch.borrow_mut().touches()
         }) {
-            if let Some(Some(touch_point)) = touches.first() { // We only care about one-finger touches
+            // We only care about one-finger touches.
+            if let Some(Some(touch_point)) = touches.first() {
                 DISPLAY_TOUCHED.signal(Instant::now());
 
                 DISPLAY_TOUCH_EVENT_UPDATED.signal(
@@ -683,30 +684,32 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_touch_instant = Instant::now();
-    let mut display_on: bool = true;
 
     loop {
         if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
             last_touch_instant = touch_instant;
 
-            if !display_on {
+            let mut display_on = DISPLAY_ON.lock().await;
+
+            if !*display_on {
                 display_cell.lock(|display| {
                     display.borrow_mut().display_on();
+                    *display_on = true
                 });
-
-                display_on = true;
             }
-        } else {
+        } else if !*FLASHLIGHT_ON.lock().await {
             let display_timeout = settings_cell.lock(|settings| {
                 settings.borrow().get_display_timeout()
             });
 
-            if Instant::now().duration_since(last_touch_instant).as_secs() > display_timeout as u64 && display_on {
+            let mut display_on = DISPLAY_ON.lock().await;
+
+            if Instant::now().duration_since(last_touch_instant).as_secs() > display_timeout as u64 && *display_on {
                 display_cell.lock(|display| {
                     display.borrow_mut().display_off();
                 });
 
-                display_on = false;
+                *display_on = false;
             }
         }
 
