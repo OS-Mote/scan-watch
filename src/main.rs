@@ -196,7 +196,7 @@ static SMART_GLASSES_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, SmartGla
 static SMART_GLASSES_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
 static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 
-static FLASHLIGHT_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
+static FLASHLIGHT_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static DISPLAY_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
