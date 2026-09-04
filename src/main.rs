@@ -651,7 +651,7 @@ async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefC
             last_date_time = date_time;
         }
 
-        Timer::after_millis(16).await;
+        Timer::after_millis(250).await;
     }
 }
 
@@ -660,6 +660,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
     let mut last_battery_status: (u8, bool) = (0, false);
 
     loop {
+        // Get the battery status as charge percentage and charge status.
         let battery_status = power_cell.lock(|power| {
             let mut power = power.borrow_mut();
 
@@ -883,8 +884,8 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                     }
                     RemoteIdScanTaskCommand::Stop => {
                         *last_wifi_controller_mutex.lock().await = None;
-                        *wifi_channel_mutex.lock().await = 1;
                         *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
+                        *wifi_channel_mutex.lock().await = 1;
                     }
                 }
             }
@@ -922,6 +923,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
     ).await;
 }
 
+// Get localized date and time.
 fn get_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>) -> DateTime<FixedOffset> {
     let timestamp = settings.get_timestamp();
     let timestamp_offset = settings.get_timestamp_offset();
