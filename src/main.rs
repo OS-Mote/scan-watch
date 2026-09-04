@@ -311,23 +311,28 @@ async fn main(spawner: Spawner) -> ! {
 
     let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
 
+    // Initialize the rendering window.
     let software_window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
 
     software_window.set_size(slint::PhysicalSize::new(LCD_WIDTH as u32, LCD_HEIGHT as u32));
 
+    // Initialize the Slint platform.
     let platform = EmbassySlintPlatform::new(software_window.clone());
 
     slint::platform::set_platform(alloc::boxed::Box::new(platform))
         .expect("Slint platform initilization failed.");
 
+    // Initialize the Slint UI window.
     let main_window = MainWindow::new()
         .expect("Could not create window.");
 
+    // Set the display brightness via settings.
     display.set_brightness(settings.get_display_brightness());
 
     let settings_cell = SETTINGS_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
     let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
 
+    // Set the UTC date while preserving the localized time.
     main_window.on_set_date(|month, day, year| {
         let date_time = critical_section::with(|cs| {
             get_date_time(&settings_cell.borrow(cs).borrow())
@@ -350,9 +355,10 @@ async fn main(spawner: Spawner) -> ! {
         });
     });
 
+    // Get localized date.
     main_window.on_get_date(|| {
-        let date_time = critical_section::with(|cs| {
-            get_date_time(&settings_cell.borrow(cs).borrow())
+        let date_time = settings_cell.lock(|settings| {
+            get_date_time(&settings.borrow())
         });
 
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
@@ -364,6 +370,7 @@ async fn main(spawner: Spawner) -> ! {
         ModelRc::from(model.clone())
     });
 
+    // Set UTC time while preserving the localized date.
     main_window.on_set_time(|hour, minute, second| {
         let date_time = critical_section::with(|cs| {
             get_date_time(&settings_cell.borrow(cs).borrow())
@@ -386,6 +393,7 @@ async fn main(spawner: Spawner) -> ! {
         });
     });
 
+    // Get localized time.
     main_window.on_get_time(|| {
         let date_time = settings_cell.lock(|settings| {
             get_date_time(&settings.borrow())
@@ -400,18 +408,21 @@ async fn main(spawner: Spawner) -> ! {
         ModelRc::from(model.clone())
     });
 
+    // Set the timezone offset.
     main_window.on_set_timezone_offset(|offset| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_timezone_offset(offset);
         });
     });
 
+    // Get the timezone offset.
     main_window.on_get_timezone_offset(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_timezone_offset()
         })
     });
 
+    // Set the screen brightness setting and change the display brightness.
     main_window.on_set_screen_brightness(|brightness| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_display_brightness(brightness as u8);
@@ -422,48 +433,56 @@ async fn main(spawner: Spawner) -> ! {
         });
     });
 
+    // Set the screen brightness setting.
     main_window.on_get_screen_brightness(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_display_brightness() as i32
         })
     });
 
+    // Set the screen timeout setting.
     main_window.on_set_screen_timeout(|timeout| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_display_timeout(timeout as u8);
         });
     });
 
+    // Get the screen timeout setting.
     main_window.on_get_screen_timeout(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_display_timeout() as i32
         })
     });
 
+    // Set the smart glasses scan duration.
     main_window.on_set_smart_glasses_scan_duration(|duration| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_smart_glasses_scan_duration(duration as u8);
         });
     });
 
+    // Get the smart glasses scan duration.
     main_window.on_get_smart_glasses_scan_duration(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_smart_glasses_scan_duration() as i32
         })
     });
 
+    // Set the Remote Id scan duration.
     main_window.on_set_remote_id_scan_duration(|duration| {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_remote_id_scan_duration(duration as u8);
         });
     });
 
+    // Get the Remote Id scan duration.
     main_window.on_get_remote_id_scan_duration(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_remote_id_scan_duration() as i32
         })
     });
 
+    // Get the number of days in month for a year.
     main_window.on_get_days_in_year_month(|year, month| {
         NaiveDate::from_ymd_opt(
             year,
@@ -474,14 +493,17 @@ async fn main(spawner: Spawner) -> ! {
             .num_days_in_month() as i32
     });
 
+    // Issue a Remote Id scan task command.
     main_window.on_set_remote_id_scan_task_command(|command| {
         REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
     });
 
+    // Issue a smart glasses scan task command.
     main_window.on_set_smart_glasses_scan_task_command(|command| {
         SMART_GLASSES_SCAN_TASK_COMMAND.signal(command);
     });
 
+    // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
         if let Ok(mut flashlight) = FLASHLIGHT_ON.try_lock() {
             *flashlight = on;
