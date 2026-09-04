@@ -337,11 +337,11 @@ async fn main(spawner: Spawner) -> ! {
 
         let adjusted_datetime = date_time
             .with_month(month as u32)
-            .unwrap()
+            .unwrap_or_default()
             .with_day(day as u32)
-            .unwrap()
+            .unwrap_or_default()
             .with_year(year)
-            .unwrap()
+            .unwrap_or_default()
             .to_utc();
 
         settings_cell.lock(|settings| {
