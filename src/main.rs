@@ -533,14 +533,17 @@ async fn main(spawner: Spawner) -> ! {
 
         // Fixme
 
+        // Set the Remote Id scan task state on the main window.
         if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE.try_lock() {
             main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
         }
 
+        // If a Remote Id device has been detected set the status on the main window..
         if let Some(remote_id_detected) = REMOTE_ID_DETECTED.try_take() {
             last_remote_id_detection = Some(remote_id_detected);
 
             main_window.set_remote_id_detected(true);
+        // Else clear the Remote Id detection status after 30 seconds.
         } else {
             if let Some(detection) = last_remote_id_detection && detection.elapsed().as_secs() >= 30 {
                 last_remote_id_detection = None;
@@ -549,14 +552,17 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
 
+        // Set the smart glasses scan task state on the main window.
         if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SCAN_TASK_STATE.try_lock() {
             main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
         }
 
+        // If smart glasses have been detected set the status on the main window..
         if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED.try_take() {
             last_smart_glasses_detection = Some(smart_glasses_detected);
 
             main_window.set_smart_glasses_detected(true);
+        // Else clear the smart glasses detection status after 30 seconds.
         } else {
             if let Some(detection) = last_smart_glasses_detection && detection.elapsed().as_secs() >= 30 {
                 last_smart_glasses_detection = None;
@@ -565,6 +571,7 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
 
+        // Set the localized date and time on the main window.
         if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
             main_window.invoke_update_datetime(
                 date_time.hour() as i32,
@@ -577,6 +584,7 @@ async fn main(spawner: Spawner) -> ! {
             );
         }
 
+        // Set battery status on the main window.
         if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
             main_window.invoke_update_battery_status(
                 battery_status.0 as i32, // Battery charge percentage
@@ -607,10 +615,12 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
                 DISPLAY_TOUCHED.signal(Instant::now());
 
                 DISPLAY_TOUCH_EVENT_UPDATED.signal(
+                    // If we have a prior touch point the pointer has moved..
                     if last_touch_point.is_some(){
                         WindowEvent::PointerMoved {
                             position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32)
                         }
+                    // Else this is a new touch.
                     } else {
                         WindowEvent::PointerPressed {
                             position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32),
@@ -620,6 +630,7 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
                 );
 
                 last_touch_point = Some(*touch_point);
+            // If there are no touches but we have a prior touch point this is the end of the touch.
             } else if let Some(touch_point) = last_touch_point {
                 DISPLAY_TOUCH_EVENT_UPDATED.signal(
                     WindowEvent::PointerReleased {
@@ -672,7 +683,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
             )
         });
 
-        // Graceful shutdown if battery has SLEEP_BATTERY_PERCENT charge or less.
+        // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less.
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
             SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
             REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
@@ -785,11 +796,15 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
                             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
                             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
                             let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
-
                             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
                             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
-
-                            let Host { central, mut runner, .. } = stack.build();
+                            
+                            let Host {
+                                central, 
+                                mut runner,
+                                ..
+                            } = stack.build();
+                            
                             let mut scanner = Scanner::new(central);
                             let scan_config = ScanConfig::default();
                             let ble_scan_handler = SmartGlassesScanHandler{};
