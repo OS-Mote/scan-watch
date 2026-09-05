@@ -104,11 +104,7 @@ export component MainWindow inherits Window {
                         icon-size: 64px;
 
                         clicked => {
-                            if root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped {
-                                root.set-smart-glasses-scan-task-command(SmartGlassesScanTaskCommand.start);
-                            } else if root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running {
-                                root.set-smart-glasses-scan-task-command(SmartGlassesScanTaskCommand.stop);
-                            }
+                            root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped ? SmartGlassesScanTaskCommand.start : SmartGlassesScanTaskCommand.stop);
                         }
 
                         states [
@@ -128,11 +124,7 @@ export component MainWindow inherits Window {
                         icon-size: 64px;
 
                         clicked => {
-                            if root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped {
-                                root.set-remote-id-scan-task-command(RemoteIdScanTaskCommand.start);
-                            } else if root.remote-id-scan-task-state == RemoteIdScanTaskState.running {
-                                root.set-remote-id-scan-task-command(RemoteIdScanTaskCommand.stop);
-                            }
+                            root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped ? RemoteIdScanTaskCommand.start : RemoteIdScanTaskCommand.stop);
                         }
 
                         states [
