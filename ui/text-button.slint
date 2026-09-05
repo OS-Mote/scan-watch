@@ -1,0 +1,19 @@
+export component TextButton inherits TouchArea {
+    in property <string> text;
+    in property <color> color: white;
+    Rectangle {
+        text := Text {
+            text: root.text;
+            color: color;
+            font-size: 32px;
+            vertical-alignment: top;
+            horizontal-alignment: center;
+        }
+    }
+
+    states [  
+        pressed when root.pressed: {
+            text.color: #808080;
+        }
+    ]
+}
