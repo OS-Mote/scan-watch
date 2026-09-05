@@ -698,7 +698,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
             )
         });
 
-        // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less.
+        // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less..
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
             SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
             REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
@@ -715,9 +715,8 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
                 rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(10))]);
             });
         }
-
-        // Signal the UI with the battery level and charge state
-        if battery_status != last_battery_status {
+        // Otherwise signal the UI with the battery level and charge state if they have changed.
+        else if battery_status != last_battery_status {
             BATTERY_STATUS_UPDATED.signal(battery_status);
 
             last_battery_status = battery_status;
@@ -781,13 +780,19 @@ const SMART_GLASSES_BLE_COMPANY_IDENTIFIERS: [u16; 3] = [
 struct SmartGlassesScanHandler {}
 
 impl EventHandler for SmartGlassesScanHandler {
+    // When a Bluetooth advertising reports have been detected..
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        // Iterate through the reports.
         while let Some(Ok(report)) = it.next() {
+            // Decode the report data.
             let mut decoder = AdStructure::decode(report.data);
 
+            // Iterate through the decoded data.
             while let Some(Ok(structure)) = decoder.next() {
+                // Match the Bluetooth device's company identifier to company identifiers of smart glasses manufacturers.
                 if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
                 SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
+                    // Signal the instant smart glasses have been detected.
                     SMART_GLASSES_DETECTED.signal(Instant::now());
                 }
             }
@@ -802,32 +807,42 @@ const L2CAP_CHANNELS_MAX: usize = 4;
 async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
         if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+            // Steal the Bluetooth peripheral.
+            // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
 
+            // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
             let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
-            
+
+            // Build the Bluetooth stack.
             let Host {
                 central, 
                 mut runner,
                 ..
             } = stack.build();
-            
+
+            // Set up the Bluetooth scanner with configuration and handler.
             let mut scanner = Scanner::new(central);
             let scan_config = ScanConfig::default();
             let ble_scan_handler = SmartGlassesScanHandler{};
 
+            // Set the smart glasses scan state as running.
             *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Running;
 
+            // Select between..
             let _ = select(
+                // The scanning future..
                 join(
                     runner.run_with_handler(&ble_scan_handler),
                     scanner.scan(&scan_config)
                 ),
+                // And a select between..
                 select(
+                    // The scan duration future..
                     async {
                         let scan_duration = settings_cell.lock(|settings| {
                             settings.borrow().get_smart_glasses_scan_duration()
@@ -835,6 +850,7 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
 
                         Timer::after_secs(scan_duration).await;
                     },
+                    // And the stop command signal future.
                     async {
                         loop {
                             if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
@@ -845,7 +861,8 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
                 )
             )
                 .await;
-            
+
+            // Set the smart glasses scan state as stopped.
             *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Stopped;
         }
     }
@@ -855,51 +872,70 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
 async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
         if RemoteIdScanTaskCommand::Start == REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
+            // Steal the Wifi peripheral.
+            // It will be freed for re-use when it goes out of scope
             let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
 
+            // Get the Wifi controller and interfaces.
             let (mut wifi_controller, wifi_interfaces) = esp_radio::wifi::new(
                 wifi_peripheral, 
                 Default::default()
             )
                 .unwrap();
 
+            // Get the Wifi sniffer interface.
             let mut wifi_sniffer = wifi_interfaces.sniffer;
 
+            // Set the Wifi packet received callback.
             wifi_sniffer.set_receive_cb(|packet| {
                 let _ = match_frames! {
                     packet.data,
                     beacon = BeaconFrame => {
+                        // If the frame has vendor-specific elements..
                         for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
+                            // And the payload prefix matches Remote Id..
                             if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
+                                // Signal the instant a Remote Id packet has been detected.
                                 REMOTE_ID_DETECTED.signal(Instant::now());
                             }
                         }
                     }
                     action = RawActionFrame => {
+                        // If the frame has a vendor payload that mathes Remote Id..
                         if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
+                            // Signal the instant a Remote Id packet has been detected.
                             REMOTE_ID_DETECTED.signal(Instant::now());
                         }
                     }
                 };
             });
 
+            // Set promiscuous mode to recieve packets from unconnected access points.
             let _ = wifi_sniffer.set_promiscuous_mode(true);
 
+            // Set the Remote Id scan state as running.
             *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;
 
+            // Select between..
             select(
+                // Wifi channel-hopping future.
                 async {
                     let mut wifi_channel: u8 = 1;
 
                     loop {
+                        // Set the Wifi channel.
                         let _ = wifi_controller.set_channel(wifi_channel, SecondaryChannel::None);
 
+                        // Increment the channel between 1..14.
                         if wifi_channel == 14 { wifi_channel = 1 } else { wifi_channel += 1 };
 
+                        // Hop channels every 1 seconds.
                         Timer::after_secs(1).await;
                     }
                 },
+                // And a select between..
                 select(
+                    // The scan duration future..
                     async {
                         let scan_duration = settings_cell.lock(|settings| {
                             settings.borrow().get_remote_id_scan_duration()
@@ -907,6 +943,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
 
                         Timer::after_secs(scan_duration).await;
                     },
+                    // And the stop command signal future.
                     async {
                         loop {
                             if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
@@ -917,6 +954,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                 )
             ).await;
 
+            // Set the Remote Id scan state as stopped.
             *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
         }
     }
