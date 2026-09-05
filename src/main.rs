@@ -361,7 +361,7 @@ async fn main(spawner: Spawner) -> ! {
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
             date_time.day() as i32,
             date_time.month() as i32,
-            date_time.year(),
+            date_time.year() % 100,
         ]));
 
         ModelRc::from(model.clone())

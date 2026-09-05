@@ -291,7 +291,7 @@ export component MainWindow inherits Window {
                         Rectangle {}
                     }
                     Text {
-                        text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + year;
+                        text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + (year < 10 ? "0" : "") + year;
                         color: white;
                         font-size: 32px;
                         vertical-alignment: top;
