@@ -747,12 +747,11 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
                 // Set the display on flag.
                 *display_on = true
             }
-        // Else start the display time-out countdown if the flashlight is not on.
-        } else if !*FLASHLIGHT_ON.lock().await {
-            let display_timeout = settings_cell.lock(|settings| {
-                settings.borrow().get_display_timeout()
-            });
-
+        // Else start the display time-out countdown if the flashlight is not on and the time-out is positive.
+        } else if !*FLASHLIGHT_ON.lock().await &&
+        let display_timeout = settings_cell.lock(|settings| {
+            settings.borrow().get_display_timeout()
+        }) > 0 {
             let mut display_on = DISPLAY_ON.lock().await;
 
             // If the display has been on longer or equal to the display timeout setting and the display is on..
@@ -835,9 +834,11 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
 
             // Select between..
             let _ = select(
-                // The scanning future..
+                // a join between..
                 join(
+                    // The Bluetooth runner with handler future..
                     runner.run_with_handler(&ble_scan_handler),
+                    // And the scanner future.
                     scanner.scan(&scan_config)
                 ),
                 // And a select between..

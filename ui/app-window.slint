@@ -472,7 +472,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     hour-slider := Slider {
-                        value: 11;
+                        value: 0;
                         minimum: 0;
                         maximum: 23;
                     }
@@ -486,7 +486,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     minute-slider := Slider {
-                        value: 29;
+                        value: 0;
                         minimum: 0;
                         maximum: 59;
                     }
@@ -500,7 +500,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     second-slider := Slider {
-                        value: 29;
+                        value: 0;
                         minimum: 0;
                         maximum: 59;
                     }
@@ -531,8 +531,8 @@ export component MainWindow inherits Window {
         
         if showing-settings-view == SettingsView.screen : Rectangle {
             init => {
-                brightness-slider.value = root.get-screen-brightness();
-                timeout-slider.value = root.get-screen-timeout();
+                brightness-slider.value = root.get-screen-brightness() / (256 + 64) * 125;
+                timeout-slider.value = root.get-screen-timeout() / 10;
             }
 
             TouchArea {
@@ -548,7 +548,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         Text { text: "Brightness"; color: white; }
                         Text {
-                            text: round(brightness-slider.value);
+                            text: round(brightness-slider.value) + "%";
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
@@ -556,14 +556,18 @@ export component MainWindow inherits Window {
                         }
                     }
                     brightness-slider := Slider{
-                        value: 255;
-                        minimum: 32;
-                        maximum: 255;
+                        value: 50;
+                        minimum: 1;
+                        maximum: 100;
+
+                        changed(value) => {
+                            self.value = round(value/10.0) * 10;
+                        }
                     }
                     HorizontalLayout {
                         Text { text: "Timeout"; color: white; }
                         Text {
-                            text: round(timeout-slider.value) + " secs";
+                            text: timeout-slider.value > 0 ? round(timeout-slider.value) + " secs" : "Indefinite";
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
@@ -571,9 +575,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     timeout-slider := Slider{
-                        value: 5;
-                        minimum: 5;
-                        maximum: 30;
+                        value: 15;
+                        minimum: 0;
+                        maximum: 60;
+
+                        changed(value) => {
+                            self.value = round(value/15.0) * 15;
+                        }
                     }
                     Rectangle {}
                     HorizontalLayout {
@@ -585,8 +593,7 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Done";
                             clicked => {
-
-                                root.set-screen-brightness(round(brightness-slider.value));
+                                root.set-screen-brightness(round(brightness-slider.value) * 0.0075 * 256 + 64);
                                 root.set-screen-timeout(round(timeout-slider.value));
 
                                 showing-settings-view = SettingsView.none;
@@ -631,7 +638,11 @@ export component MainWindow inherits Window {
                     smart-glasses-scan-duration-slider := Slider{
                         value: 15;
                         minimum: 15;
-                        maximum: 60;
+                        maximum: 300;
+
+                        changed(value) => {
+                            self.value = round(value/15.0) * 15;
+                        }
                     }
                     HorizontalLayout {
                         Text { text: "Remote Id"; color: white; }
@@ -646,7 +657,11 @@ export component MainWindow inherits Window {
                     remote-id-scan-duration-slider := Slider{
                         value: 15;
                         minimum:15;
-                        maximum: 60;
+                        maximum: 300;
+
+                        changed(value) => {
+                            self.value = round(value/15.0) * 15;
+                        }
                     }
                     Rectangle {}
                     HorizontalLayout {
