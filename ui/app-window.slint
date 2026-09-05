@@ -1,13 +1,13 @@
 import { SpinBox, ComboBox, Button, ScrollView, Slider, StandardListView, HorizontalBox, RadioGroup } from "std-widgets.slint";
 import "../resources/fonts/SF-Pro-Rounded-Regular.otf";
 
-export component BatteryIndicator inherits Rectangle {
+component BatteryIndicator inherits Rectangle {
     in-out property <int> value: 50;
     in-out property <bool> charging: false;
-    out property <image> icon;
+    property <image> icon;
     in property <length> icon-size: 16px;
 
-    Image {
+    icon := Image {
         source: root.icon;
         width: root.icon-size;
         height: root.icon-size;
@@ -15,40 +15,41 @@ export component BatteryIndicator inherits Rectangle {
 
     states [
         charging when charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-charging-50-2-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-charging-50-2-rounded.png");
         }
         full when value >= 90 && !charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-100-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-horiz-100-rounded.png");
         }
         two-thirds when value < 90 && value > 75 && !charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-075-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-horiz-075-rounded.png");
         }
         half when value <= 75 && value > 50 && !charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-050-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-horiz-050-rounded.png");
         }
         one-third when value <= 50 && value > 25 && !charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-025-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-horiz-025-rounded.png");
         }
         empty when value <= 25 && !charging: {
-            root.icon: @image-url("../resources/icons/material-symbols--battery-horiz-000-rounded.png");
+            icon: @image-url("../resources/icons/material-symbols--battery-horiz-000-rounded.png");
+            icon.colorize: #ff0000;
         }
     ]
 }
 
-export component ImageButton inherits TouchArea {
+component ImageButton inherits TouchArea {
     in property <image> icon;
     in property <length> icon-size: 16px;
+    in-out property <bool> running: false;
+    in-out property <bool> activated: false;
 
-    container := Rectangle {
-        icon := Image {
-            source: root.icon;
-            width: root.icon-size;
-            height: root.icon-size;
-            image-fit: contain;
+    icon := Image {
+        source: root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+        image-fit: contain;
 
-            animate colorize {
-                duration: 100ms;
-            }
+        animate colorize {
+            duration: 100ms;
         }
     }
 
@@ -56,10 +57,18 @@ export component ImageButton inherits TouchArea {
         pressed when root.pressed: {
             icon.colorize: #808080;
         }
+
+        activated when activated: {
+            icon.colorize: #ff0000;
+        }
+
+        running when running: {
+            icon.colorize: #00ff00;
+        }
     ]
 }
 
-export component TextButton inherits TouchArea {
+component TextButton inherits TouchArea {
     in property <string> text;
     in property <color> color: white;
     Rectangle {
@@ -77,31 +86,6 @@ export component TextButton inherits TouchArea {
             text.color: #808080;
         }
     ]
-}
-
-export component Counter inherits Rectangle {
-    in-out property <int> value;
-    in property <int> minimum;
-    in property <int> maximum;
-
-    HorizontalLayout {
-        TextButton {
-            text: "-";
-            clicked => { if value != minimum { value = value - 1 } }
-        }
-        Rectangle {}
-        Text {
-            text: value;
-            color: white;
-            vertical-alignment: top;
-            horizontal-alignment: center;
-        }
-        Rectangle {}
-        TextButton {
-            text: "+";
-            clicked => { if value != maximum { value = value + 1 } }
-        }
-    }
 }
 
 export enum SmartGlassesScanTaskCommand {
@@ -122,6 +106,15 @@ export enum RemoteIdScanTaskCommand {
 export enum RemoteIdScanTaskState {
     running,
     stopped
+}
+
+enum SettingsView {
+    none,
+    date,
+    timezone,
+    time,
+    screen,
+    scan-duration
 }
 
 export component MainWindow inherits Window {
@@ -192,6 +185,7 @@ export component MainWindow inherits Window {
                     ImageButton {
                         icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
                         icon-size: 64px;
+
                         clicked => {
                             if root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped {
                                 root.set-smart-glasses-scan-task-command(SmartGlassesScanTaskCommand.start);
@@ -202,13 +196,10 @@ export component MainWindow inherits Window {
 
                         states [
                             detected when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running  && root.smart-glasses-detected: {
-                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded-3.png");
+                                activated: true;
                             }
                             running when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running && !root.smart-glasses-detected: {
-                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded-2.png");
-                            }
-                            stopped when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped: {
-                                icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
+                                running: true;
                             }
                         ]
                     }
@@ -218,6 +209,7 @@ export component MainWindow inherits Window {
                     ImageButton {
                         icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
                         icon-size: 64px;
+
                         clicked => {
                             if root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped {
                                 root.set-remote-id-scan-task-command(RemoteIdScanTaskCommand.start);
@@ -228,13 +220,10 @@ export component MainWindow inherits Window {
 
                         states [
                             detected when root.remote-id-scan-task-state == RemoteIdScanTaskState.running  && root.remote-id-detected: {
-                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded-3.png");
+                                activated: true;
                             }
                             running when root.remote-id-scan-task-state == RemoteIdScanTaskState.running && !root.remote-id-detected: {
-                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded-2.png");
-                            }
-                            stopped when root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped: {
-                                icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
+                                running: true;
                             }
                         ]
                     }
@@ -349,38 +338,31 @@ export component MainWindow inherits Window {
     }
 
     if showing-settings : settings-container := Rectangle {
-        out property <bool> showing-date: false;
-        out property <bool> showing-timezone: false;
-        out property <bool> showing-time: false;
-        out property <bool> showing-screen: false;
-        out property <bool> showing-scan-duration: false;
+        property <SettingsView> showing-settings-view: SettingsView.none;
 
         settings-view := VerticalLayout {
             SwipeGestureHandler {
                 Flickable {
                     VerticalLayout {
                         TextButton { height: 96px; text: "Date"; 
-                            clicked => { showing-date = !showing-date; }
+                            clicked => { showing-settings-view = SettingsView.date; }
                         }
                         TextButton {
                             height: 96px; text: "Time";
-                            clicked => { showing-time = !showing-time; }
+                            clicked => { showing-settings-view = SettingsView.time; }
                         }
                         TextButton {
                             height: 96px; text: "Timezone";
-                            clicked => { showing-timezone = !showing-timezone; }
+                            clicked => { showing-settings-view = SettingsView.timezone; }
                         }
                         TextButton {
                             height: 96px; text: "Screen";
-                            clicked => { showing-screen = !showing-screen; }
+                            clicked => { showing-settings-view = SettingsView.screen; }
                         }
                         TextButton {
                             height: 96px; text: "Scan Duration";
-                            clicked => { showing-scan-duration = !showing-scan-duration }
+                            clicked => { showing-settings-view = SettingsView.scan-duration; }
                         }
-                        TextButton { height: 96px; text: "GPS"; }
-                        TextButton { height: 96px; text: "Logging"; }
-                        TextButton { height: 96px; text: "SD Card"; }
                     }
                 }
                 swiped => {
@@ -393,7 +375,7 @@ export component MainWindow inherits Window {
             visible: root.showing-settings;
         }
 
-        if showing-date : Rectangle {
+        if showing-settings-view == SettingsView.date : Rectangle {
             function month-from-index(month: int) -> string {
                 ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month];
             }
@@ -417,7 +399,7 @@ export component MainWindow inherits Window {
                     Text {
                         text: "Date";
                         color: white;
-                        font-size: 64px;
+                        font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
@@ -480,14 +462,14 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: red;
-                            clicked => { showing-date = !showing-date; }
+                            clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
                             clicked => {
                                 root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
 
-                                showing-date = !showing-date;
+                                showing-settings-view = SettingsView.none;
                             }
                         }
                     }
@@ -499,7 +481,8 @@ export component MainWindow inherits Window {
 
             background: black;
         }
-        if showing-timezone : Rectangle {
+        
+        if showing-settings-view == SettingsView.timezone : Rectangle {
             init => {
                 timezone-slider.value = root.get-timezone-offset();
             }
@@ -509,7 +492,7 @@ export component MainWindow inherits Window {
                     Text {
                         text: "Timezone";
                         color: white;
-                        font-size: 64px;
+                        font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
@@ -534,14 +517,14 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: red;
-                            clicked => { showing-timezone = !showing-timezone; }
+                            clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
                             clicked => {
                                 root.set-timezone-offset(round(timezone-slider.value));
 
-                                showing-timezone = !showing-timezone;
+                                showing-settings-view = SettingsView.none;
                             }
                         }
                     }
@@ -554,7 +537,7 @@ export component MainWindow inherits Window {
             background: black;
         }
 
-        if showing-time : Rectangle {
+        if showing-settings-view == SettingsView.time : Rectangle {
             init => {
                 let time = root.get-time();
 
@@ -568,7 +551,7 @@ export component MainWindow inherits Window {
                     Text {
                         text: "Time";
                         color: white;
-                        font-size: 64px;
+                        font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
@@ -586,7 +569,6 @@ export component MainWindow inherits Window {
                         value: 11;
                         minimum: 0;
                         maximum: 23;
-                        step: 1;
                     }
                     HorizontalLayout {
                         Text { text: "Minute"; color: white; }
@@ -601,7 +583,6 @@ export component MainWindow inherits Window {
                         value: 29;
                         minimum: 0;
                         maximum: 59;
-                        step: 1;
                     }
                     HorizontalLayout {
                         Text { text: "Second"; color: white; }
@@ -616,21 +597,20 @@ export component MainWindow inherits Window {
                         value: 29;
                         minimum: 0;
                         maximum: 59;
-                        step: 1;
                     }
                     Rectangle {}
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
                             color: red;
-                            clicked => { showing-time = !showing-time; }
+                            clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
                             clicked => {
                                 root.set-time(round(hour-slider.value), round(minute-slider.value), round(second-slider.value));
 
-                                showing-time = !showing-time;
+                                showing-settings-view = SettingsView.none;
                             }
                         }
                     }
@@ -642,7 +622,8 @@ export component MainWindow inherits Window {
 
             background: black;
         }
-        if showing-screen : Rectangle {
+        
+        if showing-settings-view == SettingsView.screen : Rectangle {
             init => {
                 brightness-slider.value = root.get-screen-brightness();
                 timeout-slider.value = root.get-screen-timeout();
@@ -653,7 +634,7 @@ export component MainWindow inherits Window {
                     Text {
                         text: "Screen";
                         color: white;
-                        font-size: 64px;
+                        font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
@@ -672,7 +653,6 @@ export component MainWindow inherits Window {
                         value: 255;
                         minimum: 32;
                         maximum: 255;
-                        step: 1;
                     }
                     HorizontalLayout {
                         Text { text: "Timeout"; color: white; }
@@ -688,14 +668,13 @@ export component MainWindow inherits Window {
                         value: 5;
                         minimum: 5;
                         maximum: 30;
-                        step: 1;
                     }
                     Rectangle {}
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
                             color: red;
-                            clicked => { showing-screen = !showing-screen; }
+                            clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
@@ -704,7 +683,7 @@ export component MainWindow inherits Window {
                                 root.set-screen-brightness(round(brightness-slider.value));
                                 root.set-screen-timeout(round(timeout-slider.value));
 
-                                showing-screen = !showing-screen;
+                                showing-settings-view = SettingsView.none;
                             }
                         }
                     }
@@ -716,7 +695,8 @@ export component MainWindow inherits Window {
 
             background: black;
         }
-        if showing-scan-duration : Rectangle {
+        
+        if showing-settings-view == SettingsView.scan-duration : Rectangle {
             init => {
                 smart-glasses-scan-duration-slider.value = root.get-smart-glasses-scan-duration();
                 remote-id-scan-duration-slider.value = root.get-remote-id-scan-duration();
@@ -725,9 +705,9 @@ export component MainWindow inherits Window {
             TouchArea {
                 VerticalLayout {
                     Text {
-                        text: "Duration";
+                        text: "Scan Duration";
                         color: white;
-                        font-size: 64px;
+                        font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
@@ -746,7 +726,6 @@ export component MainWindow inherits Window {
                         value: 15;
                         minimum: 15;
                         maximum: 60;
-                        step: 5;
                     }
                     HorizontalLayout {
                         Text { text: "Remote Id"; color: white; }
@@ -762,14 +741,13 @@ export component MainWindow inherits Window {
                         value: 15;
                         minimum:15;
                         maximum: 60;
-                        step: 5;
                     }
                     Rectangle {}
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
                             color: red;
-                            clicked => { showing-scan-duration = !showing-scan-duration; }
+                            clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
@@ -777,7 +755,7 @@ export component MainWindow inherits Window {
                                 root.set-smart-glasses-scan-duration(round(smart-glasses-scan-duration-slider.value));
                                 root.set-remote-id-scan-duration(round(remote-id-scan-duration-slider.value));
 
-                                showing-scan-duration = !showing-scan-duration;
+                                showing-settings-view = SettingsView.none;
                             }
                         }
                     }
