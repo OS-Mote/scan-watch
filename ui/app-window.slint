@@ -118,13 +118,6 @@ enum SettingsView {
 }
 
 export component MainWindow inherits Window {
-    out property <int> hour: 0;
-    out property <int> minute: 0;
-    out property <int> second: 0;
-    out property <int> day: 0;
-    out property <int> month: 0;
-    out property <int> year: 0;
-    out property <int> day-of-week: 0;
     out property <bool> showing-settings: false;
     out property <bool> showing-flashlight: false;
     in property <bool> remote-id-detected: false;
@@ -154,13 +147,13 @@ export component MainWindow inherits Window {
     pure callback set-flashlight-on(bool);
 
     update-datetime(hour, minute, second, day, month, year, day-of-week) => {
-        root.hour = hour;
-        root.minute = minute;
-        root.second = second;
-        root.day = day;
-        root.month = month;
-        root.year = year;
-        root.day-of-week = day-of-week;
+        watch-view.hour = hour;
+        watch-view.minute = minute;
+        watch-view.second = second;
+        watch-view.day = day;
+        watch-view.month = month;
+        watch-view.year = year;
+        watch-view.day-of-week = day-of-week;
     }
 
     update-battery-status(percent-charged, is-charging) => {
@@ -175,6 +168,14 @@ export component MainWindow inherits Window {
     default-font-size: 32px;
 
     watch-view := SwipeGestureHandler {
+        property <int> hour: 0;
+        property <int> minute: 0;
+        property <int> second: 0;
+        property <int> day: 0;
+        property <int> month: 0;
+        property <int> year: 0;
+        property <int> day-of-week: 0;
+        
         VerticalLayout {
             Rectangle {
                 HorizontalLayout {
@@ -236,7 +237,7 @@ export component MainWindow inherits Window {
             Rectangle {
                 VerticalLayout {
                     Text {
-                        text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][root.day-of-week];
+                        text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day-of-week];
                         color: white;
                         font-size: 32px;
                         vertical-alignment: bottom;
@@ -322,6 +323,7 @@ export component MainWindow inherits Window {
         init => {
             root.set-flashlight-on(true);
         }
+
         SwipeGestureHandler {
             Rectangle {
                 background: white;
@@ -376,10 +378,6 @@ export component MainWindow inherits Window {
         }
 
         if showing-settings-view == SettingsView.date : Rectangle {
-            function month-from-index(month: int) -> string {
-                ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month];
-            }
-            
             function update-days-in-month(year: int, month: int) {
                 day-slider.maximum = root.get-days-in-year-month(year, month);
 
@@ -426,7 +424,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         Text { text: "Month"; color: white; }
                         Text {
-                            text: month-from-index(month-slider.value -1);
+                            text: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month-slider.value -1];
                             color: white;
                             font-size: 32px;
                             vertical-alignment: top;
