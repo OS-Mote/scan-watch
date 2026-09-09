@@ -418,6 +418,20 @@ async fn main(spawner: Spawner) -> ! {
         })
     });
 
+    // Set the clock twelve-hour setting.
+    main_window.on_set_clock_twelve_hour(|clock_twelve_hour| {
+        settings_cell.lock(|settings| {
+            settings.borrow_mut().set_clock_twelve_hour(clock_twelve_hour);
+        });
+    });
+
+    // Get the clock twelve-hour setting.
+    main_window.on_get_clock_twelve_hour(|| {
+        settings_cell.lock(|settings| {
+            settings.borrow().get_clock_twelve_hour()
+        })
+    });
+
     // Set the screen brightness setting and change the display brightness.
     main_window.on_set_screen_brightness(|brightness| {
         settings_cell.lock(|settings| {
@@ -447,6 +461,20 @@ async fn main(spawner: Spawner) -> ! {
     main_window.on_get_screen_timeout(|| {
         settings_cell.lock(|settings| {
             settings.borrow().get_display_timeout() as i32
+        })
+    });
+
+    // Set the screen dark mode setting.
+    main_window.on_set_display_dark_mode(|dark_mode| {
+        settings_cell.lock(|settings| {
+            settings.borrow_mut().set_display_dark_mode(dark_mode);
+        });
+    });
+
+    // Get the screen dark mode setting.
+    main_window.on_get_display_dark_mode(|| {
+        settings_cell.lock(|settings| {
+            settings.borrow().get_display_dark_mode()
         })
     });
 
@@ -729,6 +757,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_touch_instant = Instant::now();
+    let mut last_display_brightness = 0;
 
     loop {
         // If the display has been touched..
@@ -739,6 +768,10 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
 
             // And the display is not on..
             if !*display_on {
+                last_display_brightness = settings_cell.lock(|settings| {
+                    settings.borrow().get_display_brightness()
+                });
+
                 display_cell.lock(|display| {
                     // Turn on the display..
                     display.borrow_mut().display_on();
@@ -754,19 +787,28 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
         }) > 0 {
             let mut display_on = DISPLAY_ON.lock().await;
 
-            // If the display has been on longer or equal to the display timeout setting and the display is on..
+            // If the display has been on longer or equal to the display timeout setting..
             if Instant::now().duration_since(last_touch_instant).as_secs() >= display_timeout as u64 && *display_on {
-                display_cell.lock(|display| {
-                    // Turn off the display..
-                    display.borrow_mut().display_off();
-                });
+                if last_display_brightness > 0 {
+                    last_display_brightness -= 32;
 
-                // And set the display on flag.
-                *display_on = false;
+                    display_cell.lock(|display| {
+                        // Turn off the display..
+                        display.borrow_mut().set_brightness(last_display_brightness);
+                    });
+                } else {
+                    display_cell.lock(|display| {
+                        // Turn off the display..
+                        display.borrow_mut().display_off();
+                    });
+
+                    // And set the display on flag.
+                    *display_on = false;
+                }
             }
         }
 
-        Timer::after_millis(250).await;
+        Timer::after_millis(30).await;
     }
 }
 

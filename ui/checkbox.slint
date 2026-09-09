@@ -1,0 +1,30 @@
+export component Checkbox inherits TouchArea {
+    property <image> icon;
+    in property <length> icon-size: 32px;
+    in property <bool> dark-mode: false;
+    in-out property <bool> checked: false;
+
+    icon := Image {
+        source: root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+    }
+
+    states [
+        checked when checked == true: {
+            icon: @image-url("../resources/icons/material-symbols--check-box-outline.png");
+            icon.colorize: dark-mode ? red : white;
+        }
+        unchecked when checked == false: {
+            icon: @image-url("../resources/icons/material-symbols--check-box-outline-blank.png");
+            icon.colorize: dark-mode ? red : white;
+        }
+    ]
+
+    clicked => {
+        checked = !checked;
+    }
+    
+    width: root.icon-size;
+    height: root.icon-size;
+}

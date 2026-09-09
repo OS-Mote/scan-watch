@@ -3,16 +3,14 @@ export component ImageButton inherits TouchArea {
     in property <length> icon-size: 16px;
     in-out property <bool> running: false;
     in-out property <bool> activated: false;
+    in property <bool> dark-mode: false;
 
     icon := Image {
         source: root.icon;
         width: root.icon-size;
         height: root.icon-size;
         image-fit: contain;
-
-        animate colorize {
-            duration: 100ms;
-        }
+        colorize: dark-mode ? red : white;
     }
 
     states [  
@@ -21,11 +19,11 @@ export component ImageButton inherits TouchArea {
         }
 
         activated when activated: {
-            icon.colorize: #ff0000;
+            icon.colorize: dark-mode ? yellow : red;
         }
 
         running when running: {
-            icon.colorize: #00ff00;
+            icon.colorize: green;
         }
     ]
 }

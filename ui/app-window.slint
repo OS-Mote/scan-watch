@@ -1,7 +1,9 @@
-import { SpinBox, ComboBox, Button, ScrollView, Slider, StandardListView, HorizontalBox, RadioGroup } from "std-widgets.slint";
+import { ScrollView, Slider } from "std-widgets.slint";
 import { BatteryIndicator } from "battery-indicator.slint";
 import { ImageButton } from "image-button.slint";
 import { TextButton } from "text-button.slint";
+import { Checkbox } from "checkbox.slint";
+
 import "../resources/fonts/SF-Pro-Rounded-Regular.otf";
 
 export enum SmartGlassesScanTaskCommand {
@@ -29,6 +31,7 @@ enum SettingsView {
     date,
     timezone,
     time,
+    clock,
     screen,
     scan-duration
 }
@@ -40,6 +43,8 @@ export component MainWindow inherits Window {
     in property <bool> smart-glasses-detected: false;
     in property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
     in property <SmartGlassesScanTaskState> smart-glasses-scan-task-state: SmartGlassesScanTaskState.stopped;
+    property <bool> clock-twelve-hour: false;
+    property <bool> dark-mode: false;
 
     pure callback set-date(month: int, day: int, year: int);
     callback get-date() -> [int]; // Day, month, years
@@ -47,11 +52,15 @@ export component MainWindow inherits Window {
     callback get-time() -> [int]; // Hour, minute, second
     pure callback set-timezone-offset(offset: int);
     callback get-timezone-offset() -> int;
+    pure callback set-clock-twelve-hour(clock-twelve-hour: bool);
+    callback get-clock-twelve-hour() -> bool;
     callback get-days-in-year-month(year: int, month: int) -> int;
     pure callback set-screen-brightness(brightness: int);
     callback get-screen-brightness() -> int;
     pure callback set-screen-timeout(timeout: int);
     callback get-screen-timeout() -> int;
+    pure callback set-display-dark-mode(dark-mode: bool);
+    callback get-display-dark-mode() -> bool;
     pure callback set-smart-glasses-scan-duration(duration: int);
     callback get-smart-glasses-scan-duration() -> int;
     pure callback set-remote-id-scan-duration(duration: int);
@@ -83,7 +92,7 @@ export component MainWindow inherits Window {
     default-font-family: "SF Pro Rounded";
     default-font-size: 32px;
 
-    watch-view := SwipeGestureHandler {
+    watch-view := Rectangle {
         property <int> hour: 0;
         property <int> minute: 0;
         property <int> second: 0;
@@ -91,140 +100,149 @@ export component MainWindow inherits Window {
         property <int> month: 0;
         property <int> year: 0;
         property <int> day-of-week: 0;
-        
-        VerticalLayout {
-            Rectangle {
-                HorizontalLayout {
-                    ImageButton {
-                        icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
-                        icon-size: 64px;
-                    }
-                    ImageButton {
-                        icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
-                        icon-size: 64px;
 
-                        clicked => {
-                            root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped ? SmartGlassesScanTaskCommand.start : SmartGlassesScanTaskCommand.stop);
-                        }
+        init => {
+            root.dark-mode = root.get-display-dark-mode();
+        }
 
-                        states [
-                            detected when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running  && root.smart-glasses-detected: {
-                                activated: true;
-                            }
-                            running when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running && !root.smart-glasses-detected: {
-                                running: true;
-                            }
-                        ]
-                    }
-                    Rectangle {
-                        height: parent.height / 3;
-                    }
-                    ImageButton {
-                        icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
-                        icon-size: 64px;
-
-                        clicked => {
-                            root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped ? RemoteIdScanTaskCommand.start : RemoteIdScanTaskCommand.stop);
-                        }
-
-                        states [
-                            detected when root.remote-id-scan-task-state == RemoteIdScanTaskState.running  && root.remote-id-detected: {
-                                activated: true;
-                            }
-                            running when root.remote-id-scan-task-state == RemoteIdScanTaskState.running && !root.remote-id-detected: {
-                                running: true;
-                            }
-                        ]
-                    }
-
-                    padding: 32px;
-                }
-                
-                height: parent.height / 3;
-            }
-            Rectangle {
-                VerticalLayout {
-                    Text {
-                        text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day-of-week];
-                        color: white;
-                        font-size: 32px;
-                        vertical-alignment: bottom;
-                        horizontal-alignment: center;
-                    }
+        SwipeGestureHandler {
+            VerticalLayout {
+                Rectangle {
                     HorizontalLayout {
-                        Rectangle {}
-                        Text {
-                            text: (hour < 10 ? "0" : "") + hour;
-                            color: white;
-                            font-size: 72px;
-                            font-weight: FontWeight.black;
-                            vertical-alignment: bottom;
-                            horizontal-alignment: right;
-                            width: 90px;
+                        ImageButton {
+                            icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
+                            icon-size: 64px;
+                            dark-mode: root.dark-mode;
                         }
-                        Text {
-                            text: ":";
-                            color: white;
-                            font-size: 72px;
-                            font-weight: FontWeight.black;
-                            vertical-alignment: bottom;
-                            horizontal-alignment: center;
+                        ImageButton {
+                            icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
+                            icon-size: 64px;
+                            dark-mode: root.dark-mode;
+
+                            clicked => {
+                                root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped ? SmartGlassesScanTaskCommand.start : SmartGlassesScanTaskCommand.stop);
+                            }
+
+                            states [
+                                detected when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running  && root.smart-glasses-detected: {
+                                    activated: true;
+                                }
+                                running when root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.running && !root.smart-glasses-detected: {
+                                    running: true;
+                                }
+                            ]
                         }
-                        Text {
-                            text: (minute < 10 ? "0" : "") + minute;
-                            color: white;
-                            font-size: 72px;
-                            font-weight: FontWeight.black;
-                            vertical-alignment: bottom;
-                            horizontal-alignment: center;
-                            width: 88px;
+                        Rectangle {
+                            height: parent.height / 3;
                         }
-                        Text {
-                            text: ":";
-                            color: white;
-                            font-size: 72px;
-                            font-weight: FontWeight.black;
-                            vertical-alignment: bottom;
-                            horizontal-alignment: center;
+                        ImageButton {
+                            icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
+                            icon-size: 64px;
+                            dark-mode: root.dark-mode;
+
+                            clicked => {
+                                root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped ? RemoteIdScanTaskCommand.start : RemoteIdScanTaskCommand.stop);
+                            }
+
+                            states [
+                                detected when root.remote-id-scan-task-state == RemoteIdScanTaskState.running  && root.remote-id-detected: {
+                                    activated: true;
+                                }
+                                running when root.remote-id-scan-task-state == RemoteIdScanTaskState.running && !root.remote-id-detected: {
+                                    running: true;
+                                }
+                            ]
                         }
-                        Text {
-                            text: (second < 10 ? "0" : "") + second;
-                            color: white;
-                            font-size: 72px;
-                            font-weight: FontWeight.black;
-                            vertical-alignment: bottom;
-                            horizontal-alignment: left;
-                            width: 88px;
-                        }
-                        Rectangle {}
+
+                        padding: 32px;
                     }
-                    Text {
-                        text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + (year < 10 ? "0" : "") + year;
-                        color: white;
-                        font-size: 32px;
-                        vertical-alignment: top;
-                        horizontal-alignment: center;
-                    }
+                    
+                    height: parent.height / 3;
                 }
+                Rectangle {
+                    VerticalLayout {
+                        Text {
+                            text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day-of-week];
+                            color: root.dark-mode ? red : white;
+                            font-size: 32px;
+                            vertical-alignment: bottom;
+                            horizontal-alignment: center;
+                        }
+                        HorizontalLayout {
+                            Rectangle {}
+                            Text {
+                                text: (hour < 10 ? "0" : "") + (root.clock-twelve-hour ? mod(hour + 1, 12) : hour);
+                                color: root.dark-mode ? red : white;
+                                font-size: 72px;
+                                font-weight: FontWeight.black;
+                                vertical-alignment: bottom;
+                                horizontal-alignment: right;
+                                width: 90px;
+                            }
+                            Text {
+                                text: ":";
+                                color: root.dark-mode ? red : white;
+                                font-size: 72px;
+                                font-weight: FontWeight.black;
+                                vertical-alignment: bottom;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: (minute < 10 ? "0" : "") + minute;
+                                color: root.dark-mode ? red : white;
+                                font-size: 72px;
+                                font-weight: FontWeight.black;
+                                vertical-alignment: bottom;
+                                horizontal-alignment: center;
+                                width: 88px;
+                            }
+                            Text {
+                                text: ":";
+                                color: root.dark-mode ? red : white;
+                                font-size: 72px;
+                                font-weight: FontWeight.black;
+                                vertical-alignment: bottom;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: (second < 10 ? "0" : "") + second;
+                                color: root.dark-mode ? red : white;
+                                font-size: 72px;
+                                font-weight: FontWeight.black;
+                                vertical-alignment: bottom;
+                                horizontal-alignment: left;
+                                width: 88px;
+                            }
+                            Rectangle {}
+                        }
+                        Text {
+                            text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + (year < 10 ? "0" : "") + year;
+                            color: root.dark-mode ? red : white;
+                            font-size: 32px;
+                            vertical-alignment: top;
+                            horizontal-alignment: center;
+                        }
+                    }
 
-                height: parent.height / 3;
+                    height: parent.height / 3;
+                }
+                battery-indicator := BatteryIndicator {
+                    icon-size: 64px;
+                    dark-mode: root.dark-mode;
+                }
             }
-            battery-indicator := BatteryIndicator {
-                icon-size: 64px;
+
+            swiped => {
+                if self.current-position.x > self.pressed-position.x + self.width / 4 {
+                    showing-flashlight = true;
+                } else if self.current-position.x < self.pressed-position.x - self.width / 4 {
+                    showing-settings = true;
+                }
             }
+
+            handle-swipe-right: true;
+            handle-swipe-left: true;
         }
-
-        swiped => {
-            if self.current-position.x > self.pressed-position.x + self.width / 4 {
-                showing-flashlight = true;
-            } else if self.current-position.x < self.pressed-position.x - self.width / 4 {
-                showing-settings = true;
-            }
-        }
-
-        handle-swipe-right: true;
-        handle-swipe-left: true;
-        visible: !root.showing-settings;
     }
 
     if showing-flashlight : Rectangle {
@@ -234,7 +252,7 @@ export component MainWindow inherits Window {
 
         SwipeGestureHandler {
             Rectangle {
-                background: white;
+                background: root.dark-mode ? red : white;
             }
 
             swiped => {
@@ -250,38 +268,64 @@ export component MainWindow inherits Window {
     if showing-settings : settings-container := Rectangle {
         property <SettingsView> showing-settings-view: SettingsView.none;
 
-        settings-view := VerticalLayout {
-            SwipeGestureHandler {
-                Flickable {
-                    VerticalLayout {
-                        TextButton { height: 96px; text: "Date"; 
-                            clicked => { showing-settings-view = SettingsView.date; }
-                        }
-                        TextButton {
-                            height: 96px; text: "Time";
-                            clicked => { showing-settings-view = SettingsView.time; }
-                        }
-                        TextButton {
-                            height: 96px; text: "Timezone";
-                            clicked => { showing-settings-view = SettingsView.timezone; }
-                        }
-                        TextButton {
-                            height: 96px; text: "Screen";
-                            clicked => { showing-settings-view = SettingsView.screen; }
-                        }
-                        TextButton {
-                            height: 96px; text: "Scan Duration";
-                            clicked => { showing-settings-view = SettingsView.scan-duration; }
+        settings-view := Rectangle {
+            VerticalLayout {
+                SwipeGestureHandler {
+                    Flickable {
+                        VerticalLayout {
+                            TextButton {
+                                height: 96px;
+                                text: "Date";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.date; }
+                            }
+                            TextButton {
+                                height: 96px;
+                                text: "Time";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.time; }
+                            }
+                            TextButton {
+                                height: 96px;
+                                text: "Timezone";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.timezone; }
+                            }
+                            TextButton {
+                                height: 96px;
+                                text: "Clock";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.clock; }
+                            }
+                            TextButton {
+                                height: 96px;
+                                text: "Screen";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.screen; }
+                            }
+                            TextButton {
+                                height: 96px;
+                                text: "Scan Duration";
+                                color: root.dark-mode ? red : white;
+
+                                clicked => { showing-settings-view = SettingsView.scan-duration; }
+                            }
                         }
                     }
-                }
-                swiped => {
-                    root.showing-settings = false;
-                }
+                    swiped => {
+                        root.showing-settings = false;
+                    }
 
-                handle-swipe-right: true;
+                    handle-swipe-right: true;
+                }
             }
 
+            background: black;
             visible: root.showing-settings;
         }
 
@@ -304,17 +348,20 @@ export component MainWindow inherits Window {
                 VerticalLayout {
                     Text {
                         text: "Date";
-                        color: white;
+                        color: root.dark-mode ? red : white;
                         font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
                     Rectangle {}
                     HorizontalLayout {
-                        Text { text: "Year"; color: white; }
+                        Text {
+                            text: "Year";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(year-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -330,10 +377,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     HorizontalLayout {
-                        Text { text: "Month"; color: white; }
+                        Text {
+                            text: "Month";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month-slider.value -1];
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -349,10 +399,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     HorizontalLayout {
-                        Text { text: "Day"; color: white; }
+                        Text {
+                            text: "Day";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(day-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -372,6 +425,8 @@ export component MainWindow inherits Window {
                         }
                         TextButton {
                             text: "Done";
+                            color: root.dark-mode ? red : white;
+
                             clicked => {
                                 root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
 
@@ -404,10 +459,13 @@ export component MainWindow inherits Window {
                     }
                     Rectangle {}
                     HorizontalLayout {
-                        Text { text: "Offset"; color: white; }
+                        Text {
+                            text: "Offset";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(timezone-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -427,6 +485,8 @@ export component MainWindow inherits Window {
                         }
                         TextButton {
                             text: "Done";
+                            color: root.dark-mode ? red : white;
+
                             clicked => {
                                 root.set-timezone-offset(round(timezone-slider.value));
 
@@ -456,17 +516,20 @@ export component MainWindow inherits Window {
                 VerticalLayout {
                     Text {
                         text: "Time";
-                        color: white;
+                        color: root.dark-mode ? red : white;
                         font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
                     Rectangle {}
                     HorizontalLayout {
-                        Text { text: "Hour"; color: white; }
+                        Text {
+                            text: "Hour";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(hour-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -477,10 +540,13 @@ export component MainWindow inherits Window {
                         maximum: 23;
                     }
                     HorizontalLayout {
-                        Text { text: "Minute"; color: white; }
+                        Text {
+                            text: "Minute";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(minute-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -491,10 +557,13 @@ export component MainWindow inherits Window {
                         maximum: 59;
                     }
                     HorizontalLayout {
-                        Text { text: "Second"; color: white; }
+                        Text {
+                            text: "Second";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(second-slider.value);
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -513,9 +582,63 @@ export component MainWindow inherits Window {
                         }
                         TextButton {
                             text: "Done";
+                            color: root.dark-mode ? red : white;
+
                             clicked => {
                                 root.set-time(round(hour-slider.value), round(minute-slider.value), round(second-slider.value));
 
+                                showing-settings-view = SettingsView.none;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+
+        if showing-settings-view == SettingsView.clock : Rectangle {
+            init => {
+                clock-twelve-hour-checkbox.checked = root.get-clock-twelve-hour();
+            }
+
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Clock";
+                        color: white;
+                        font-size: 48px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        Text {
+                            text: "12-Hour";
+                            color: root.dark-mode ? red : white;
+                        }
+                        clock-twelve-hour-checkbox := Checkbox {
+                            checked: false;
+                            dark-mode: root.dark-mode;
+                        }
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: red;
+                            clicked => { showing-settings-view = SettingsView.none; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            color: root.dark-mode ? red : white;
+
+                            clicked => {
+                                root.set-clock-twelve-hour(clock-twelve-hour-checkbox.checked);
+                                root.clock-twelve-hour = clock-twelve-hour-checkbox.checked;
                                 showing-settings-view = SettingsView.none;
                             }
                         }
@@ -533,23 +656,27 @@ export component MainWindow inherits Window {
             init => {
                 brightness-slider.value = root.get-screen-brightness() / (256 + 64) * 125;
                 timeout-slider.value = root.get-screen-timeout() / 10;
+                dark-mode-checkbox.checked = root.get-display-dark-mode();
             }
 
             TouchArea {
                 VerticalLayout {
                     Text {
                         text: "Screen";
-                        color: white;
+                        color: root.dark-mode ? red : white;
                         font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
                     Rectangle {}
                     HorizontalLayout {
-                        Text { text: "Brightness"; color: white; }
+                        Text {
+                            text: "Brightness";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(brightness-slider.value) + "%";
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -565,10 +692,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     HorizontalLayout {
-                        Text { text: "Timeout"; color: white; }
                         Text {
-                            text: timeout-slider.value > 0 ? round(timeout-slider.value) + " secs" : "Indefinite";
-                            color: white;
+                            text: "Timeout";
+                            color: root.dark-mode ? red : white;
+                        }
+                        Text {
+                            text: timeout-slider.value > 0 ? round(timeout-slider.value) + " secs" : "Off";
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -583,6 +713,16 @@ export component MainWindow inherits Window {
                             self.value = round(value/15.0) * 15;
                         }
                     }
+                    HorizontalLayout {
+                        Text {
+                            text: "Dark Mode";
+                            color: root.dark-mode ? red : white;
+                        }
+                        dark-mode-checkbox := Checkbox {
+                            checked: false;
+                            dark-mode: root.dark-mode;
+                        }
+                    }
                     Rectangle {}
                     HorizontalLayout {
                         TextButton {
@@ -592,9 +732,13 @@ export component MainWindow inherits Window {
                         }
                         TextButton {
                             text: "Done";
+                            color: root.dark-mode ? red : white;
+
                             clicked => {
                                 root.set-screen-brightness(round(brightness-slider.value) * 0.0075 * 256 + 64);
                                 root.set-screen-timeout(round(timeout-slider.value));
+                                root.set-display-dark-mode(dark-mode-checkbox.checked);
+                                root.dark-mode = dark-mode-checkbox.checked;
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -619,17 +763,20 @@ export component MainWindow inherits Window {
                 VerticalLayout {
                     Text {
                         text: "Scan Duration";
-                        color: white;
+                        color: root.dark-mode ? red : white;
                         font-size: 48px;
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
                     Rectangle {}
                     HorizontalLayout {
-                        Text { text: "Smart Glasses"; color: white; }
+                        Text {
+                            text: "Smart Glasses";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(smart-glasses-scan-duration-slider.value) + " secs";
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
@@ -645,10 +792,13 @@ export component MainWindow inherits Window {
                         }
                     }
                     HorizontalLayout {
-                        Text { text: "Remote Id"; color: white; }
+                        Text {
+                            text: "Remote Id";
+                            color: root.dark-mode ? red : white;
+                        }
                         Text {
                             text: round(remote-id-scan-duration-slider.value) + " secs";
-                            color: white;
+                            color: root.dark-mode ? red : white;
                             font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
