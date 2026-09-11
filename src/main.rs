@@ -326,6 +326,7 @@ async fn main(spawner: Spawner) -> ! {
     display.set_brightness(settings.get_display_brightness());
 
     main_window.set_dark_mode(settings.get_display_dark_mode());
+    main_window.set_clock_twelve_hour(settings.get_clock_twelve_hour());
 
     let settings_cell = SETTINGS_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
     let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
