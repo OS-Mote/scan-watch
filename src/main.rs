@@ -187,7 +187,6 @@ static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'stat
 static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
 static SETTINGS_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
 
-
 static REMOTE_ID_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
 static SMART_GLASSES_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
 static FLASHLIGHT_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
@@ -251,15 +250,12 @@ async fn main(spawner: Spawner) -> ! {
 
     // If we woke up on a timer, check the battery charge.
     // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
-    // Otherwise set the local timestamp from RTC and reset the timestamp offset.
-    if let SleepSource::Timer = wakeup_cause() {
-        if power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
-            rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
-        } else {
-            settings.set_timestamp(rtc.current_time_us() as i64);
-            settings.set_timestamp_offset(Instant::now().as_micros());
-        }
+    if let SleepSource::Timer = wakeup_cause() && power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
+        rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
     }
+
+    settings.set_timestamp(rtc.current_time_us() as i64);
+    // settings.set_timestamp_offset(Instant::now().as_micros());
 
     let rtc_cell = RTC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
     let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
@@ -289,8 +285,8 @@ async fn main(spawner: Spawner) -> ! {
 
     display.init();
 
-    // Enable Tearing Effect output on CO5300 (TE pin is GPIO13)
-    // Using command 0x35 (TEARON) and param 0x00 (VBlank only)
+    // Enable Tearing Effect output on CO5300 (TE pin is GPIO13).
+    // Using command 0x35 (TEARON) and param 0x00 (VBlank only).
     display.bus_mut().write_c8d8(0x35, 0x00);
 
     let te_pin = Input::new(peripherals.GPIO13, InputConfig::default());
@@ -352,6 +348,10 @@ async fn main(spawner: Spawner) -> ! {
             settings.set_timestamp(adjusted_datetime.timestamp_micros());
             settings.set_timestamp_offset(Instant::now().as_micros());
         });
+
+        rtc_cell.lock(|rtc| {
+            rtc.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
+        });
     });
 
     // Get localized date.
@@ -389,6 +389,10 @@ async fn main(spawner: Spawner) -> ! {
 
             settings.set_timestamp(adjusted_datetime.timestamp_micros());
             settings.set_timestamp_offset(Instant::now().as_micros());
+        });
+
+        rtc_cell.lock(|rtc| {
+            rtc.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
         });
     });
 
@@ -567,6 +571,7 @@ async fn main(spawner: Spawner) -> ! {
 
     loop {
         slint::platform::update_timers_and_animations();
+
         if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
             software_window.dispatch_event(touch_event);
         }

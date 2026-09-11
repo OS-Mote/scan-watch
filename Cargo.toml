@@ -7,7 +7,7 @@ build        = "build.rs"
 resolver     = "2" 
 
 [profile.dev]
-opt-level = "s" # Optimizes code size to prevent async task stack overflow crashes
+opt-level = "s"
 
 [profile.release]
 opt-level = 3
@@ -18,7 +18,7 @@ name = "scan-watch"
 path = "./src/main.rs"
 
 [dependencies]
-slint = { version = "1.7", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
+slint = { version = "1.17.1", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
 esp-hal = { version = "1.1.1", default-features = false, features = ["esp32s3", "unstable"] }
 chrono = { version = "0.4.45", default-features = false }
 
@@ -82,15 +82,3 @@ embassy-net = { version = "0.9.1", features = ["proto-ipv4", "medium-ethernet", 
 
 [build-dependencies]
 slint-build = { version = "1.7" }
-
-# For fine tuning these settings, please refer to https://doc.rust-lang.org/cargo/reference/profiles.html
-# [profile.dev]
-# # The default debug profile is too slow and too big for resource-constrained devices.
-# # Always build with some optimizations enabled.
-# opt-level = "s"
-
-# [profile.release]
-# codegen-units = 1     # LLVM can perform better optimizations using a single thread
-# debug         = 2     # prefer slower builds but better debugging experience
-# lto           = 'fat'
-# opt-level     = 's'

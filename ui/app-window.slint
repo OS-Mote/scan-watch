@@ -4,7 +4,7 @@ import { ImageButton } from "image-button.slint";
 import { TextButton } from "text-button.slint";
 import { Checkbox } from "checkbox.slint";
 
-import "../resources/fonts/SF-Pro-Rounded-Regular.otf";
+import "../resources/fonts/SF-Pro-Rounded-Bold.otf";
 
 export enum SmartGlassesScanTaskCommand {
     start,
@@ -107,12 +107,10 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
-                            icon-size: 64px;
                             dark-mode: root.dark-mode;
                         }
                         ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
-                            icon-size: 64px;
                             dark-mode: root.dark-mode;
 
                             clicked => {
@@ -130,7 +128,6 @@ export component MainWindow inherits Window {
                         }
                         ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
-                            icon-size: 64px;
                             dark-mode: root.dark-mode;
 
                             clicked => {
@@ -157,7 +154,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][day-of-week];
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: bottom;
                             horizontal-alignment: center;
                         }
@@ -167,7 +163,6 @@ export component MainWindow inherits Window {
                                 text: (hour < 10 ? "0" : "") + (root.clock-twelve-hour ? (hour > 12 ? hour - 12 : hour) : hour);
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
-                                font-weight: FontWeight.black;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: right;
                                 width: 90px;
@@ -176,7 +171,6 @@ export component MainWindow inherits Window {
                                 text: ":";
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
-                                font-weight: FontWeight.black;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: center;
                             }
@@ -184,7 +178,6 @@ export component MainWindow inherits Window {
                                 text: (minute < 10 ? "0" : "") + minute;
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
-                                font-weight: FontWeight.black;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: center;
                                 width: 88px;
@@ -193,7 +186,6 @@ export component MainWindow inherits Window {
                                 text: ":";
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
-                                font-weight: FontWeight.black;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: center;
                             }
@@ -201,7 +193,6 @@ export component MainWindow inherits Window {
                                 text: (second < 10 ? "0" : "") + second;
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
-                                font-weight: FontWeight.black;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: left;
                                 width: 88px;
@@ -211,7 +202,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: (month < 10 ? "0" : "") + month + "-" + (day < 10 ? "0" : "") + day + "-" + (year < 10 ? "0" : "") + year;
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: center;
                         }
@@ -220,7 +210,6 @@ export component MainWindow inherits Window {
                     height: parent.height / 3;
                 }
                 battery-indicator := BatteryIndicator {
-                    icon-size: 64px;
                     dark-mode: root.dark-mode;
                 }
             }
@@ -347,7 +336,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(year-slider.value);
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -369,7 +357,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month-slider.value -1];
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -391,7 +378,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(day-slider.value);
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -447,7 +433,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(timezone-slider.value);
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -640,7 +625,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(brightness-slider.value) + "%";
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -662,7 +646,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: timeout-slider.value > 0 ? round(timeout-slider.value) + " secs" : "Off";
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -735,7 +718,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(smart-glasses-scan-duration-slider.value) + " secs";
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
@@ -757,7 +739,6 @@ export component MainWindow inherits Window {
                         Text {
                             text: round(remote-id-scan-duration-slider.value) + " secs";
                             color: root.dark-mode ? red : white;
-                            font-size: 32px;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
