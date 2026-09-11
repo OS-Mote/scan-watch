@@ -325,6 +325,8 @@ async fn main(spawner: Spawner) -> ! {
     // Set the display brightness via settings.
     display.set_brightness(settings.get_display_brightness());
 
+    main_window.set_dark_mode(settings.get_display_dark_mode());
+
     let settings_cell = SETTINGS_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
     let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
 
@@ -360,7 +362,7 @@ async fn main(spawner: Spawner) -> ! {
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
             date_time.day() as i32,
             date_time.month() as i32,
-            date_time.year() % 100,
+            date_time.year(),
         ]));
 
         ModelRc::from(model.clone())

@@ -44,27 +44,27 @@ export component MainWindow inherits Window {
     in property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
     in property <SmartGlassesScanTaskState> smart-glasses-scan-task-state: SmartGlassesScanTaskState.stopped;
     property <bool> clock-twelve-hour: false;
-    property <bool> dark-mode: false;
+    in-out property <bool> dark-mode: false;
 
     pure callback set-date(month: int, day: int, year: int);
-    callback get-date() -> [int]; // Day, month, years
+    pure callback get-date() -> [int]; // Day, month, years
     pure callback set-time(hour: int, minute: int, second: int);
-    callback get-time() -> [int]; // Hour, minute, second
+    pure callback get-time() -> [int]; // Hour, minute, second
     pure callback set-timezone-offset(offset: int);
-    callback get-timezone-offset() -> int;
+    pure callback get-timezone-offset() -> int;
     pure callback set-clock-twelve-hour(clock-twelve-hour: bool);
-    callback get-clock-twelve-hour() -> bool;
+    pure callback get-clock-twelve-hour() -> bool;
     callback get-days-in-year-month(year: int, month: int) -> int;
     pure callback set-screen-brightness(brightness: int);
-    callback get-screen-brightness() -> int;
+    pure callback get-screen-brightness() -> int;
     pure callback set-screen-timeout(timeout: int);
-    callback get-screen-timeout() -> int;
+    pure callback get-screen-timeout() -> int;
     pure callback set-display-dark-mode(dark-mode: bool);
-    callback get-display-dark-mode() -> bool;
+    pure callback get-display-dark-mode() -> bool;
     pure callback set-smart-glasses-scan-duration(duration: int);
-    callback get-smart-glasses-scan-duration() -> int;
+    pure callback get-smart-glasses-scan-duration() -> int;
     pure callback set-remote-id-scan-duration(duration: int);
-    callback get-remote-id-scan-duration() -> int;
+    pure callback get-remote-id-scan-duration() -> int;
     pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
     pure callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
@@ -336,14 +336,6 @@ export component MainWindow inherits Window {
                 if day-slider.value > day-slider.maximum { day-slider.value = day-slider.maximum };
             }
 
-            init => {
-                let date = root.get-date();
-
-                day-slider.value = date[0];
-                month-slider.value = date[1];
-                year-slider.value = date[2];
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -368,7 +360,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     year-slider := Slider{
-                        value: 2025;
+                        value: root.get-date()[2];
                         minimum: 2025;
                         maximum: 2050;
 
@@ -390,7 +382,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     month-slider := Slider{
-                        value: 1;
+                        value: root.get-date()[1];
                         minimum: 1;
                         maximum: 12;
 
@@ -412,7 +404,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     day-slider := Slider{
-                        value: 1;
+                        value: root.get-date()[0];
                         minimum: 1;
                         maximum: 30;
                     }
@@ -444,10 +436,6 @@ export component MainWindow inherits Window {
         }
         
         if showing-settings-view == SettingsView.timezone : Rectangle {
-            init => {
-                timezone-slider.value = root.get-timezone-offset();
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -472,7 +460,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     timezone-slider := Slider{
-                        value: 0;
+                        value: root.get-timezone-offset();
                         minimum: -23;
                         maximum: 23;
                     }
@@ -504,14 +492,6 @@ export component MainWindow inherits Window {
         }
 
         if showing-settings-view == SettingsView.time : Rectangle {
-            init => {
-                let time = root.get-time();
-
-                hour-slider.value = time[0];
-                minute-slider.value = time[1];
-                second-slider.value = time[2];
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -535,7 +515,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     hour-slider := Slider {
-                        value: 0;
+                        value: root.get-time()[0];
                         minimum: 0;
                         maximum: 23;
                     }
@@ -552,7 +532,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     minute-slider := Slider {
-                        value: 0;
+                        value: root.get-time()[1];
                         minimum: 0;
                         maximum: 59;
                     }
@@ -569,7 +549,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     second-slider := Slider {
-                        value: 0;
+                        value: root.get-time()[2];
                         minimum: 0;
                         maximum: 59;
                     }
@@ -601,10 +581,6 @@ export component MainWindow inherits Window {
         }
 
         if showing-settings-view == SettingsView.clock : Rectangle {
-            init => {
-                clock-twelve-hour-checkbox.checked = root.get-clock-twelve-hour();
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -621,7 +597,7 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         clock-twelve-hour-checkbox := Checkbox {
-                            checked: false;
+                            checked: root.get-clock-twelve-hour();
                             dark-mode: root.dark-mode;
                         }
                     }
@@ -653,12 +629,6 @@ export component MainWindow inherits Window {
         }
         
         if showing-settings-view == SettingsView.screen : Rectangle {
-            init => {
-                brightness-slider.value = ((root.get-screen-brightness() - 64) / 255) * 100;
-                timeout-slider.value = root.get-screen-timeout();
-                dark-mode-checkbox.checked = root.get-display-dark-mode();
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -683,7 +653,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     brightness-slider := Slider{
-                        value: 50;
+                        value: ((root.get-screen-brightness() - 64) / 255) * 100;
                         minimum: 1;
                         maximum: 100;
 
@@ -705,7 +675,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     timeout-slider := Slider{
-                        value: 15;
+                        value: root.get-screen-timeout();
                         minimum: 0;
                         maximum: 60;
 
@@ -719,7 +689,7 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         dark-mode-checkbox := Checkbox {
-                            checked: false;
+                            checked: root.get-display-dark-mode();
                             dark-mode: root.dark-mode;
                         }
                     }
@@ -755,11 +725,6 @@ export component MainWindow inherits Window {
         }
         
         if showing-settings-view == SettingsView.scan-duration : Rectangle {
-            init => {
-                smart-glasses-scan-duration-slider.value = root.get-smart-glasses-scan-duration();
-                remote-id-scan-duration-slider.value = root.get-remote-id-scan-duration();
-            }
-
             TouchArea {
                 VerticalLayout {
                     Text {
@@ -784,7 +749,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     smart-glasses-scan-duration-slider := Slider{
-                        value: 15;
+                        value: root.get-smart-glasses-scan-duration();
                         minimum: 15;
                         maximum: 300;
 
@@ -806,7 +771,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     remote-id-scan-duration-slider := Slider{
-                        value: 15;
+                        value: root.get-remote-id-scan-duration();
                         minimum:15;
                         maximum: 300;
 
