@@ -971,7 +971,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                     // And the stop command signal future.
                     async {
                         loop {
-                            if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+                            if RemoteIdScanTaskCommand::Stop == REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
                                 return;
                             }
                         }
