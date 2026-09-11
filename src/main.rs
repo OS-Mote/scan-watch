@@ -564,10 +564,6 @@ async fn main(spawner: Spawner) -> ! {
 
     loop {
         slint::platform::update_timers_and_animations();
-
-        // Don't render a frame if the display is off
-        if !*DISPLAY_ON.lock().await { continue; }
-
         if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
             software_window.dispatch_event(touch_event);
         }
@@ -757,46 +753,31 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 #[task]
 async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_touch_instant = Instant::now();
-    let mut last_display_brightness = 0;
 
     loop {
-        // If the display has been touched..
-        if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
-            last_touch_instant = touch_instant;
+        if let Ok(mut display_on) = DISPLAY_ON.try_lock() {
+            // If the display has been touched..
+            if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
+                last_touch_instant = touch_instant;
 
-            let mut display_on = DISPLAY_ON.lock().await;
-
-            // And the display is not on..
-            if !*display_on {
-                last_display_brightness = settings_cell.lock(|settings| {
-                    settings.borrow().get_display_brightness()
-                });
-
-                display_cell.lock(|display| {
-                    // Turn on the display..
-                    display.borrow_mut().display_on();
-                });
-
-                // Set the display on flag.
-                *display_on = true
-            }
-        // Else start the display time-out countdown if the flashlight is not on and the time-out is positive.
-        } else if !*FLASHLIGHT_ON.lock().await &&
-        let display_timeout = settings_cell.lock(|settings| {
-            settings.borrow().get_display_timeout()
-        }) > 0 {
-            let mut display_on = DISPLAY_ON.lock().await;
-
-            // If the display has been on longer or equal to the display timeout setting..
-            if Instant::now().duration_since(last_touch_instant).as_secs() >= display_timeout as u64 && *display_on {
-                if last_display_brightness > 0 {
-                    last_display_brightness -= 32;
-
+                // And the display is not on..
+                if !*display_on {
                     display_cell.lock(|display| {
-                        // Turn off the display..
-                        display.borrow_mut().set_brightness(last_display_brightness);
+                        // Turn on the display..
+                        display.borrow_mut().display_on();
                     });
-                } else {
+
+                    // Set the display on flag.
+                    *display_on = true
+                }
+            // Else start the display time-out countdown if the flashlight is not on and the time-out is positive.
+            } else if !*FLASHLIGHT_ON.lock().await {
+                let display_timeout = settings_cell.lock(|settings| {
+                    settings.borrow().get_display_timeout()
+                });
+
+                // If the display has been on longer or equal to the display timeout setting..
+                if Instant::now().duration_since(last_touch_instant).as_secs() >= display_timeout as u64 && *display_on {
                     display_cell.lock(|display| {
                         // Turn off the display..
                         display.borrow_mut().display_off();
@@ -807,8 +788,7 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
                 }
             }
         }
-
-        Timer::after_millis(30).await;
+        Timer::after_millis(16).await;
     }
 }
 

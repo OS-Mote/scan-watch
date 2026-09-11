@@ -654,8 +654,8 @@ export component MainWindow inherits Window {
         
         if showing-settings-view == SettingsView.screen : Rectangle {
             init => {
-                brightness-slider.value = root.get-screen-brightness() / (256 + 64) * 125;
-                timeout-slider.value = root.get-screen-timeout() / 10;
+                brightness-slider.value = ((root.get-screen-brightness() - 64) / 255) * 100;
+                timeout-slider.value = root.get-screen-timeout();
                 dark-mode-checkbox.checked = root.get-display-dark-mode();
             }
 
@@ -710,7 +710,7 @@ export component MainWindow inherits Window {
                         maximum: 60;
 
                         changed(value) => {
-                            self.value = round(value/15.0) * 15;
+                            self.value = round(value/5.0) * 5;
                         }
                     }
                     HorizontalLayout {
@@ -735,7 +735,8 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
 
                             clicked => {
-                                root.set-screen-brightness(round(brightness-slider.value) * 0.0075 * 256 + 64);
+                                // ((0 + 25)/100) * 255
+                                root.set-screen-brightness(((round(brightness-slider.value) + 25) / 100) * 255);
                                 root.set-screen-timeout(round(timeout-slider.value));
                                 root.set-display-dark-mode(dark-mode-checkbox.checked);
                                 root.dark-mode = dark-mode-checkbox.checked;
