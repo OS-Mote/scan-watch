@@ -46,30 +46,28 @@ export component MainWindow inherits Window {
     in-out property <bool> clock-twelve-hour: false;
     in-out property <bool> dark-mode: false;
 
-    pure callback set-date(month: int, day: int, year: int);
+    callback set-date(month: int, day: int, year: int);
     pure callback get-date() -> [int]; // Day, month, years
-    pure callback set-time(hour: int, minute: int, second: int);
+    callback set-time(hour: int, minute: int, second: int);
     pure callback get-time() -> [int]; // Hour, minute, second
-    pure callback set-timezone-offset(offset: int);
+    callback set-timezone-offset(offset: int);
     pure callback get-timezone-offset() -> int;
-    pure callback set-clock-twelve-hour(clock-twelve-hour: bool);
-    pure callback get-clock-twelve-hour() -> bool;
+    callback set-clock-twelve-hour(clock-twelve-hour: bool);
     pure callback get-days-in-year-month(year: int, month: int) -> int;
-    pure callback set-screen-brightness(brightness: int);
+    callback set-screen-brightness(brightness: int);
     pure callback get-screen-brightness() -> int;
-    pure callback set-screen-timeout(timeout: int);
+    callback set-screen-timeout(timeout: int);
     pure callback get-screen-timeout() -> int;
-    pure callback set-display-dark-mode(dark-mode: bool);
-    pure callback get-display-dark-mode() -> bool;
-    pure callback set-smart-glasses-scan-duration(duration: int);
+    callback set-display-dark-mode(dark-mode: bool);
+    callback set-smart-glasses-scan-duration(duration: int);
     pure callback get-smart-glasses-scan-duration() -> int;
-    pure callback set-remote-id-scan-duration(duration: int);
+    callback set-remote-id-scan-duration(duration: int);
     pure callback get-remote-id-scan-duration() -> int;
-    pure callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
-    pure callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
+    callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
+    callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
     callback update-battery-status(percent-charged: int, is-charging: bool);
-    pure callback set-flashlight-on(bool);
+    callback set-flashlight-on(bool);
 
     update-datetime(hour, minute, second, day, month, year, day-of-week) => {
         watch-view.hour = hour;
@@ -160,12 +158,11 @@ export component MainWindow inherits Window {
                         HorizontalLayout {
                             Rectangle {}
                             Text {
-                                text: (hour < 10 ? "0" : "") + (root.clock-twelve-hour ? (hour > 12 ? hour - 12 : hour) : hour);
+                                text: ((root.clock-twelve-hour ? (hour > 12 ? hour - 12 : hour) : hour) < 10 ? "0" : "") + (root.clock-twelve-hour ? (hour > 12 ? hour - 12 : hour) : hour);
                                 color: root.dark-mode ? red : white;
                                 font-size: 72px;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: right;
-                                width: 90px;
                             }
                             Text {
                                 text: ":";
@@ -180,7 +177,6 @@ export component MainWindow inherits Window {
                                 font-size: 72px;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: center;
-                                width: 88px;
                             }
                             Text {
                                 text: ":";
@@ -195,7 +191,6 @@ export component MainWindow inherits Window {
                                 font-size: 72px;
                                 vertical-alignment: bottom;
                                 horizontal-alignment: left;
-                                width: 88px;
                             }
                             Rectangle {}
                         }
@@ -217,6 +212,9 @@ export component MainWindow inherits Window {
             swiped => {
                 if self.current-position.x > self.pressed-position.x + self.width / 4 {
                     showing-flashlight = true;
+
+                    root.set-flashlight-on(true);
+
                 } else if self.current-position.x < self.pressed-position.x - self.width / 4 {
                     showing-settings = true;
                 }
@@ -228,10 +226,6 @@ export component MainWindow inherits Window {
     }
 
     if showing-flashlight : Rectangle {
-        init => {
-            root.set-flashlight-on(true);
-        }
-
         SwipeGestureHandler {
             Rectangle {
                 background: root.dark-mode ? red : white;
@@ -309,109 +303,6 @@ export component MainWindow inherits Window {
 
             background: black;
             visible: root.showing-settings;
-        }
-
-        if showing-settings-view == SettingsView.date : Rectangle {
-            function update-days-in-month(year: int, month: int) {
-                day-slider.maximum = root.get-days-in-year-month(year, month);
-
-                if day-slider.value > day-slider.maximum { day-slider.value = day-slider.maximum };
-            }
-
-            TouchArea {
-                VerticalLayout {
-                    Text {
-                        text: "Date";
-                        color: root.dark-mode ? red : white;
-                        font-size: 48px;
-                        vertical-alignment: top;
-                        horizontal-alignment: center;
-                    }
-                    Rectangle {}
-                    HorizontalLayout {
-                        Text {
-                            text: "Year";
-                            color: root.dark-mode ? red : white;
-                        }
-                        Text {
-                            text: round(year-slider.value);
-                            color: root.dark-mode ? red : white;
-                            vertical-alignment: top;
-                            horizontal-alignment: right;
-                        }
-                    }
-                    year-slider := Slider{
-                        value: root.get-date()[2];
-                        minimum: 2025;
-                        maximum: 2050;
-
-                        changed(_) => {
-                            update-days-in-month(year-slider.value, month-slider.value);
-                        }
-                    }
-                    HorizontalLayout {
-                        Text {
-                            text: "Month";
-                            color: root.dark-mode ? red : white;
-                        }
-                        Text {
-                            text: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month-slider.value -1];
-                            color: root.dark-mode ? red : white;
-                            vertical-alignment: top;
-                            horizontal-alignment: right;
-                        }
-                    }
-                    month-slider := Slider{
-                        value: root.get-date()[1];
-                        minimum: 1;
-                        maximum: 12;
-
-                        changed(_) => {
-                            update-days-in-month(round(year-slider.value), round(month-slider.value));
-                        }
-                    }
-                    HorizontalLayout {
-                        Text {
-                            text: "Day";
-                            color: root.dark-mode ? red : white;
-                        }
-                        Text {
-                            text: round(day-slider.value);
-                            color: root.dark-mode ? red : white;
-                            vertical-alignment: top;
-                            horizontal-alignment: right;
-                        }
-                    }
-                    day-slider := Slider{
-                        value: root.get-date()[0];
-                        minimum: 1;
-                        maximum: root.get-days-in-year-month(year-slider.value, month-slider.value);
-                    }
-                    Rectangle {}
-                    HorizontalLayout {
-                        TextButton {
-                            text: "Cancel";
-                            color: red;
-                            clicked => { showing-settings-view = SettingsView.none; }
-                        }
-                        TextButton {
-                            text: "Done";
-                            color: root.dark-mode ? red : white;
-
-                            clicked => {
-                                root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
-
-                                showing-settings-view = SettingsView.none;
-                            }
-                        }
-                    }
-
-                    spacing: 16px;
-                    padding: 32px;
-                }
-            }
-
-            background: black;
         }
         
         if showing-settings-view == SettingsView.timezone : Rectangle {
@@ -575,7 +466,7 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         clock-twelve-hour-checkbox := Checkbox {
-                            checked: root.get-clock-twelve-hour();
+                            checked: root.clock-twelve-hour;
                             dark-mode: root.dark-mode;
                         }
                     }
@@ -665,7 +556,7 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         dark-mode-checkbox := Checkbox {
-                            checked: root.get-display-dark-mode();
+                            checked: root.dark-mode;
                             dark-mode: root.dark-mode;
                         }
                     }

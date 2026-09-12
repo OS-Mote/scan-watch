@@ -180,26 +180,26 @@ impl slint::platform::Platform for EmbassySlintPlatform {
 const SLEEP_BATTERY_PERCENTAGE: u8 = 5;
 const SLEEP_SECONDS_FOR_CHARING: u64 = 10;
 
-static RTC_CELL: StaticCell<CriticalSectionMutex<RefCell<Rtc<'static>>>> = StaticCell::new();
-static POWER_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>> = StaticCell::new();
-static FLASH_STORAGE_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
-static DISPLAY_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
-static TOUCH_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
-static SETTINGS_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
+static RTC_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Rtc<'static>>>> = StaticCell::new();
+static POWER_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>> = StaticCell::new();
+static FLASH_STORAGE_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
+static DISPLAY_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
+static TOUCH_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
+static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
 
-static REMOTE_ID_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
-static SMART_GLASSES_SCAN_TASK_STATE: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
-static FLASHLIGHT_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
-static DISPLAY_ON: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
+static REMOTE_ID_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
+static SMART_GLASSES_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
+static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
+static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 
-static REMOTE_ID_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
-static REMOTE_ID_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
-static SMART_GLASSES_SCAN_TASK_COMMAND: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
-static SMART_GLASSES_DETECTED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
-static DISPLAY_TOUCHED: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
-static DISPLAY_TOUCH_EVENT_UPDATED: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
-static BATTERY_STATUS_UPDATED: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
-static DATE_TIME_UPDATED: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
+static REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
+static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
+static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
+static BATTERY_STATUS_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
+static DATE_TIME_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -244,7 +244,7 @@ async fn main(spawner: Spawner) -> ! {
     let flash_storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH))
         .expect("Flash storage initilization failed.");
 
-    let flash_storage_cell = FLASH_STORAGE_CELL.init(CriticalSectionMutex::new(RefCell::new(flash_storage)));
+    let flash_storage_cell = FLASH_STORAGE_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(flash_storage)));
 
     let mut settings = Settings::new(flash_storage_cell).init();
 
@@ -257,8 +257,8 @@ async fn main(spawner: Spawner) -> ! {
     settings.set_timestamp(rtc.current_time_us() as i64);
     // settings.set_timestamp_offset(Instant::now().as_micros());
 
-    let rtc_cell = RTC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
-    let power_cell = POWER_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
+    let rtc_cell = RTC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
+    let power_cell = POWER_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
 
     // Initialize SPI bus.
     let spi_config = SpiConfig::default()
@@ -301,7 +301,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut touch = BlockingCST92xx::new(RefCellDevice::new(static_i2c_ref), 0x1A, Delay::new());
     let _ = touch.init();
 
-    let touch_cell = TOUCH_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
+    let touch_cell = TOUCH_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
 
     // Initialize the rendering window.
     let software_window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -324,8 +324,8 @@ async fn main(spawner: Spawner) -> ! {
     main_window.set_dark_mode(settings.get_display_dark_mode());
     main_window.set_clock_twelve_hour(settings.get_clock_twelve_hour());
 
-    let settings_cell = SETTINGS_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
-    let display_cell = DISPLAY_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
+    let settings_cell = SETTINGS_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
+    let display_cell = DISPLAY_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(display)));
 
     // Set the UTC date while preserving the localized time.
     main_window.on_set_date(|month, day, year| {
@@ -432,13 +432,6 @@ async fn main(spawner: Spawner) -> ! {
         });
     });
 
-    // Get the clock twelve-hour setting.
-    main_window.on_get_clock_twelve_hour(|| {
-        settings_cell.lock(|settings| {
-            settings.borrow().get_clock_twelve_hour()
-        })
-    });
-
     // Set the screen brightness setting and change the display brightness.
     main_window.on_set_screen_brightness(|brightness| {
         settings_cell.lock(|settings| {
@@ -476,13 +469,6 @@ async fn main(spawner: Spawner) -> ! {
         settings_cell.lock(|settings| {
             settings.borrow_mut().set_display_dark_mode(dark_mode);
         });
-    });
-
-    // Get the screen dark mode setting.
-    main_window.on_get_display_dark_mode(|| {
-        settings_cell.lock(|settings| {
-            settings.borrow().get_display_dark_mode()
-        })
     });
 
     // Set the smart glasses scan duration.
@@ -526,17 +512,17 @@ async fn main(spawner: Spawner) -> ! {
 
     // Issue a Remote Id scan task command.
     main_window.on_set_remote_id_scan_task_command(|command| {
-        REMOTE_ID_SCAN_TASK_COMMAND.signal(command);
+        REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(command);
     });
 
     // Issue a smart glasses scan task command.
     main_window.on_set_smart_glasses_scan_task_command(|command| {
-        SMART_GLASSES_SCAN_TASK_COMMAND.signal(command);
+        SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(command);
     });
-
+    
     // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
-        if let Ok(mut flashlight) = FLASHLIGHT_ON.try_lock() {
+        if let Ok(mut flashlight) = FLASHLIGHT_ON_MUTEX.try_lock() {
             // If the flashlight is on..
             if on {
                 display_cell.lock(|display| {
@@ -545,11 +531,13 @@ async fn main(spawner: Spawner) -> ! {
                 });
             // Else if the flashlight is off..
             } else {
+                let brightness = settings_cell.lock(|settings| {
+                    settings.borrow().get_display_brightness()
+                });
+
+                // Set the brightness to the user defined value.
                 display_cell.lock(|display| {
-                    settings_cell.lock(|settings| {
-                        // Set the display brightness to the settings value.
-                        display.borrow_mut().set_brightness(settings.borrow().get_display_brightness());
-                    });
+                    display.borrow_mut().set_brightness(brightness);
                 });
             }
 
@@ -557,8 +545,8 @@ async fn main(spawner: Spawner) -> ! {
         }
     });
 
-    spawner.spawn(battery_status_task(power_cell, rtc_cell, settings_cell).unwrap());
-    spawner.spawn(touch_event_update_task(touch_cell).unwrap());
+    spawner.spawn(battery_status_update_task(power_cell, rtc_cell, settings_cell).unwrap());
+    spawner.spawn(touch_event_task(touch_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_cell, settings_cell).unwrap());
     spawner.spawn(remote_id_sniffing_task(settings_cell).unwrap());
@@ -572,19 +560,19 @@ async fn main(spawner: Spawner) -> ! {
     loop {
         slint::platform::update_timers_and_animations();
 
-        if let Some(touch_event) = DISPLAY_TOUCH_EVENT_UPDATED.try_take() {
+        if let Some(touch_event) = DISPLAY_TOUCH_EVENT_SIGNAL.try_take() {
             software_window.dispatch_event(touch_event);
         }
 
         // Fixme
 
         // Set the Remote Id scan task state on the main window.
-        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE.try_lock() {
+        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE_MUTEX.try_lock() {
             main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
         }
 
         // If a Remote Id device has been detected set the status on the main window..
-        if let Some(remote_id_detected) = REMOTE_ID_DETECTED.try_take() {
+        if let Some(remote_id_detected) = REMOTE_ID_DETECTED_SIGNAL.try_take() {
             last_remote_id_detection = Some(remote_id_detected);
 
             main_window.set_remote_id_detected(true);
@@ -598,12 +586,12 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the smart glasses scan task state on the main window.
-        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SCAN_TASK_STATE.try_lock() {
+        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SCAN_TASK_STATE_MUTEX.try_lock() {
             main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
         }
 
         // If smart glasses have been detected set the status on the main window..
-        if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED.try_take() {
+        if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED_SIGNAL.try_take() {
             last_smart_glasses_detection = Some(smart_glasses_detected);
 
             main_window.set_smart_glasses_detected(true);
@@ -617,7 +605,7 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the localized date and time on the main window.
-        if let Some(date_time) = DATE_TIME_UPDATED.try_take() {
+        if let Some(date_time) = DATE_TIME_UPDATED_SIGNAL.try_take() {
             main_window.invoke_update_datetime(
                 date_time.hour() as i32,
                 date_time.minute() as i32,
@@ -630,7 +618,7 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set battery status on the main window.
-        if let Some(battery_status) = BATTERY_STATUS_UPDATED.try_take() {
+        if let Some(battery_status) = BATTERY_STATUS_UPDATED_SIGNAL.try_take() {
             main_window.invoke_update_battery_status(
                 battery_status.0 as i32, // Battery charge percentage
                 battery_status.1 // Is charging
@@ -650,7 +638,7 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 #[task]
-async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
+async fn touch_event_task(touch_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
     let mut last_touch_point: Option<TouchPoint> = None;
 
     loop {
@@ -659,9 +647,9 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
         }) {
             // We only care about one-finger touches.
             if let Some(Some(touch_point)) = touches.first() {
-                DISPLAY_TOUCHED.signal(Instant::now());
+                DISPLAY_TOUCHED_SIGNAL.signal(Instant::now());
 
-                DISPLAY_TOUCH_EVENT_UPDATED.signal(
+                DISPLAY_TOUCH_EVENT_SIGNAL.signal(
                     // If we have a prior touch point the pointer has moved..
                     if last_touch_point.is_some(){
                         WindowEvent::PointerMoved {
@@ -679,7 +667,7 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
                 last_touch_point = Some(*touch_point);
             // If there are no touches but we have a prior touch point this is the end of the touch.
             } else if let Some(touch_point) = last_touch_point {
-                DISPLAY_TOUCH_EVENT_UPDATED.signal(
+                DISPLAY_TOUCH_EVENT_SIGNAL.signal(
                     WindowEvent::PointerReleased {
                         position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32), 
                         button: PointerEventButton::Left 
@@ -696,25 +684,19 @@ async fn touch_event_update_task(touch_cell: &'static CriticalSectionMutex<RefCe
 
 #[task]
 async fn date_time_update_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
-    let mut last_date_time = DateTime::UNIX_EPOCH.fixed_offset();
-
     loop {
         let date_time = settings_cell.lock(|settings| {
             get_date_time(&settings.borrow())
         });
 
-        if date_time != last_date_time {
-            DATE_TIME_UPDATED.signal(date_time);
-
-            last_date_time = date_time;
-        }
+        DATE_TIME_UPDATED_SIGNAL.signal(date_time);
 
         Timer::after_millis(250).await;
     }
 }
 
 #[task]
-async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>, rtc_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+async fn battery_status_update_task(power_cell: &'static CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>, rtc_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>, settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_battery_status: (u8, bool) = (0, false);
 
     loop {
@@ -732,8 +714,8 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
 
         // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less..
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
-            SMART_GLASSES_SCAN_TASK_COMMAND.signal(SmartGlassesScanTaskCommand::Stop);
-            REMOTE_ID_SCAN_TASK_COMMAND.signal(RemoteIdScanTaskCommand::Stop);
+            SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(SmartGlassesScanTaskCommand::Stop);
+            REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(RemoteIdScanTaskCommand::Stop);
 
             let date_time = settings_cell.lock(|settings| {
                 get_date_time(&settings.borrow_mut())
@@ -749,7 +731,7 @@ async fn battery_status_task(power_cell: &'static CriticalSectionMutex<RefCell<A
         }
         // Otherwise signal the UI with the battery level and charge state if they have changed.
         else if battery_status != last_battery_status {
-            BATTERY_STATUS_UPDATED.signal(battery_status);
+            BATTERY_STATUS_UPDATED_SIGNAL.signal(battery_status);
 
             last_battery_status = battery_status;
         }
@@ -763,9 +745,9 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
     let mut last_touch_instant = Instant::now();
 
     loop {
-        if let Ok(mut display_on) = DISPLAY_ON.try_lock() {
+        if let Ok(mut display_on) = DISPLAY_ON_MUTEX.try_lock() {
             // If the display has been touched..
-            if let Some(touch_instant) = DISPLAY_TOUCHED.try_take() {
+            if let Some(touch_instant) = DISPLAY_TOUCHED_SIGNAL.try_take() {
                 last_touch_instant = touch_instant;
 
                 // And the display is not on..
@@ -779,7 +761,7 @@ async fn display_timeout_countdown_task(display_cell: &'static CriticalSectionMu
                     *display_on = true
                 }
             // Else start the display time-out countdown if the flashlight is not on and the time-out is positive.
-            } else if !*FLASHLIGHT_ON.lock().await {
+            } else if !*FLASHLIGHT_ON_MUTEX.lock().await {
                 let display_timeout = settings_cell.lock(|settings| {
                     settings.borrow().get_display_timeout()
                 });
@@ -822,7 +804,7 @@ impl EventHandler for SmartGlassesScanHandler {
                 if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
                 SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
                     // Signal the instant smart glasses have been detected.
-                    SMART_GLASSES_DETECTED.signal(Instant::now());
+                    SMART_GLASSES_DETECTED_SIGNAL.signal(Instant::now());
                 }
             }
         }
@@ -835,7 +817,7 @@ const L2CAP_CHANNELS_MAX: usize = 4;
 #[task]
 async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
-        if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+        if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Bluetooth peripheral.
             // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
@@ -860,7 +842,7 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
             let ble_scan_handler = SmartGlassesScanHandler{};
 
             // Set the smart glasses scan state as running.
-            *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Running;
+            *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await = SmartGlassesScanTaskState::Running;
 
             // Select between..
             let _ = select(
@@ -884,7 +866,7 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
                     // And the stop command signal future.
                     async {
                         loop {
-                            if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND.wait().await {
+                            if SmartGlassesScanTaskCommand::Stop == SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.wait().await {
                                 return;
                             }
                         }
@@ -894,7 +876,7 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
                 .await;
 
             // Set the smart glasses scan state as stopped.
-            *SMART_GLASSES_SCAN_TASK_STATE.lock().await = SmartGlassesScanTaskState::Stopped;
+            *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await = SmartGlassesScanTaskState::Stopped;
         }
     }
 }
@@ -902,7 +884,7 @@ async fn smart_glasses_scan_task(settings_cell: &'static CriticalSectionMutex<Re
 #[task]
 async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
-        if RemoteIdScanTaskCommand::Start == REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
+        if RemoteIdScanTaskCommand::Start == REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Wifi peripheral.
             // It will be freed for re-use when it goes out of scope
             let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
@@ -927,7 +909,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                             // And the payload prefix matches Remote Id..
                             if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
                                 // Signal the instant a Remote Id packet has been detected.
-                                REMOTE_ID_DETECTED.signal(Instant::now());
+                                REMOTE_ID_DETECTED_SIGNAL.signal(Instant::now());
                             }
                         }
                     }
@@ -935,7 +917,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                         // If the frame has a vendor payload that mathes Remote Id..
                         if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
                             // Signal the instant a Remote Id packet has been detected.
-                            REMOTE_ID_DETECTED.signal(Instant::now());
+                            REMOTE_ID_DETECTED_SIGNAL.signal(Instant::now());
                         }
                     }
                 };
@@ -945,7 +927,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
             let _ = wifi_sniffer.set_promiscuous_mode(true);
 
             // Set the Remote Id scan state as running.
-            *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Running;
+            *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Running;
 
             // Select between..
             select(
@@ -977,7 +959,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
                     // And the stop command signal future.
                     async {
                         loop {
-                            if RemoteIdScanTaskCommand::Stop == REMOTE_ID_SCAN_TASK_COMMAND.wait().await {
+                            if RemoteIdScanTaskCommand::Stop == REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.wait().await {
                                 return;
                             }
                         }
@@ -986,7 +968,7 @@ async fn remote_id_sniffing_task(settings_cell: &'static CriticalSectionMutex<Re
             ).await;
 
             // Set the Remote Id scan state as stopped.
-            *REMOTE_ID_SCAN_TASK_STATE.lock().await = RemoteIdScanTaskState::Stopped;
+            *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Stopped;
         }
     }
 }
