@@ -52,7 +52,7 @@ export component MainWindow inherits Window {
     in-out property <bool> dark-mode: false;
 
     callback set-date(month: int, day: int, year: int);
-    pure callback get-date() -> [int]; // Day, month, years
+    pure callback get-date() -> [int]; // Day, month, year
     callback set-time(hour: int, minute: int, second: int);
     pure callback get-time() -> [int]; // Hour, minute, second
     callback set-timezone-offset(offset: int);
