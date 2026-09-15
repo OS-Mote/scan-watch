@@ -279,7 +279,6 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     settings.set_timestamp(rtc.current_time_us() as i64);
-    // settings.set_timestamp_offset(Instant::now().as_micros());
 
     let rtc_static_cell = RTC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
     let power_static_cell = POWER_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));

@@ -13,7 +13,11 @@ export component ImageButton inherits TouchArea {
         colorize: dark-mode ? red : white;
     }
 
-    states [  
+    states [
+        disabled when !self.enabled: {
+            icon.colorize: #808080;
+        }
+
         pressed when root.pressed: {
             icon.colorize: #808080;
         }

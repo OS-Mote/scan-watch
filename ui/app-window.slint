@@ -6,6 +6,16 @@ import { Checkbox } from "checkbox.slint";
 
 import "../resources/fonts/SF-Pro-Rounded-Bold.otf";
 
+export enum NetworkCameraScanTaskCommand {
+    start,
+    stop
+}
+
+export enum NetworkCameraScanTaskState {
+    running,
+    stopped
+}
+
 export enum SmartGlassesScanTaskCommand {
     start,
     stop
@@ -46,8 +56,9 @@ export component MainWindow inherits Window {
     property <HomeView> showing-home-view: HomeView.clock;
     in property <bool> remote-id-detected: false;
     in property <bool> smart-glasses-detected: false;
-    in property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
+    in property <NetworkCameraScanTaskState> network-camera-scan-task-state: NetworkCameraScanTaskState.stopped;
     in property <SmartGlassesScanTaskState> smart-glasses-scan-task-state: SmartGlassesScanTaskState.stopped;
+    in property <RemoteIdScanTaskState> remote-id-scan-task-state: RemoteIdScanTaskState.stopped;
     in-out property <bool> clock-twelve-hour: false;
     in-out property <bool> dark-mode: false;
 
@@ -108,14 +119,16 @@ export component MainWindow inherits Window {
             VerticalLayout {
                 Rectangle {
                     HorizontalLayout {
-                        ImageButton {
+                        network-camera-scan-button := ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
                             dark-mode: root.dark-mode;
+                            enabled: smart-glasses-scan-task-state != SmartGlassesScanTaskState.running && remote-id-scan-task-state != RemoteIdScanTaskState.running;
                         }
-                        ImageButton {
+                        smart-glasses-scan-button := ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
                             dark-mode: root.dark-mode;
-
+                            enabled: network-camera-scan-task-state != NetworkCameraScanTaskState.running && remote-id-scan-task-state != RemoteIdScanTaskState.running;
+                            
                             clicked => {
                                 root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped ? SmartGlassesScanTaskCommand.start : SmartGlassesScanTaskCommand.stop);
                             }
@@ -132,6 +145,7 @@ export component MainWindow inherits Window {
                         ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
                             dark-mode: root.dark-mode;
+                            enabled: network-camera-scan-task-state != NetworkCameraScanTaskState.running && smart-glasses-scan-task-state != SmartGlassesScanTaskState.running;
 
                             clicked => {
                                 root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped ? RemoteIdScanTaskCommand.start : RemoteIdScanTaskCommand.stop);
