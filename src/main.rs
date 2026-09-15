@@ -281,9 +281,11 @@ async fn main(spawner: Spawner) -> ! {
 
     let flash_storage_static_cell = FLASH_STORAGE_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(flash_storage)));
 
+    // Use an embedded-hal 0.2 proxy to support the haptic motor.
     let i2c_v0_2_proxy = I2cProxyV0_2(static_i2c_ref);
     let mut haptic = Drv2605::new(i2c_v0_2_proxy);
     
+    // Initialize the haptic motor.
     let _ = haptic.init_open_loop_erm();
     
     let haptic_static_cell = HAPTIC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(haptic)));
@@ -343,7 +345,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut touch = BlockingCST92xx::new(RefCellDevice::new(static_i2c_ref), 0x1A, Delay::new());
     let _ = touch.init();
 
-    let touch_cell = TOUCH_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
+    let touch_static_cell = TOUCH_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(touch)));
 
     // Initialize the rendering window.
     let software_window = MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
@@ -588,7 +590,7 @@ async fn main(spawner: Spawner) -> ! {
     });
 
     spawner.spawn(battery_status_update_task(power_static_cell, rtc_static_cell, settings_static_cell).unwrap());
-    spawner.spawn(touch_event_task(touch_cell, haptic_static_cell).unwrap());
+    spawner.spawn(touch_event_task(touch_static_cell, haptic_static_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_static_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_static_cell, settings_static_cell).unwrap());
     spawner.spawn(remote_id_sniffing_task(settings_static_cell).unwrap());
@@ -699,6 +701,7 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
                         }
                     // Else this is a new touch.
                     } else {
+                        // Use the haptic motor to send a "click" vibration to the user.
                         haptic_static_cell.lock(|haptic| {
                             let mut haptic = haptic.borrow_mut();
 
