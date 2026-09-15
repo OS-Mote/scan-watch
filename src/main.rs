@@ -127,14 +127,15 @@ use slint::{
         WindowEvent
     }
 };
-use embedded_hal_compat::ReverseCompat;
-use drv2605::{Drv2605, Effect, Register};
+use drv2605::{
+    Drv2605,
+    Effect
+};
 use cst92xx::{
     BlockingCST92xx,
     Point as TouchPoint
 };
 
-use esp_hal::gpio::Pull;
 mod qspi_bus;
 mod framebuffer;
 mod axp2101;
