@@ -345,6 +345,7 @@ async fn main(spawner: Spawner) -> ! {
     // Set the display brightness via settings.
     display.set_brightness(settings.get_display_brightness());
 
+    // Set visual preferences before showing the clock.
     main_window.set_dark_mode(settings.get_display_dark_mode());
     main_window.set_clock_twelve_hour(settings.get_clock_twelve_hour());
 
@@ -569,6 +570,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     });
 
+    // Spawn tasks.
     spawner.spawn(battery_status_update_task(power_static_cell, rtc_static_cell, settings_static_cell).unwrap());
     spawner.spawn(touch_event_task(touch_static_cell, haptic_static_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_static_cell).unwrap());
