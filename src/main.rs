@@ -202,20 +202,20 @@ static TOUCH_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92x
 static HAPTIC_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>> = StaticCell::new();
 static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
 
+static BATTERY_STATUS_MUTEX: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
 static REMOTE_ID_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
+static REMOTE_ID_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static SMART_GLASSES_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
+static SMART_GLASSES_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 
 static REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-static REMOTE_ID_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
 static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-static SMART_GLASSES_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
-static BATTERY_STATUS_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
 static DATE_TIME_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
 
 #[esp_rtos::main]
@@ -600,8 +600,8 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the Remote Id alert on the main window.
-        if let Some(remote_id_alert) = REMOTE_ID_ALERT_SIGNAL.try_take() {
-            main_window.set_remote_id_detected(remote_id_alert);
+        if let Ok(remote_id_alert) = REMOTE_ID_ALERT_MUTEX.try_lock() {
+            main_window.set_remote_id_detected(*remote_id_alert);
         }
 
         // Set the smart glasses scan task state on the main window.
@@ -610,8 +610,8 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the smart glasses alert on the main window.
-        if let Some(smart_glasses_alert) = SMART_GLASSES_ALERT_SIGNAL.try_take() {
-            main_window.set_smart_glasses_detected(smart_glasses_alert)
+        if let Ok(smart_glasses_alert) = SMART_GLASSES_ALERT_MUTEX.try_lock() {
+            main_window.set_smart_glasses_detected(*smart_glasses_alert)
         }
 
         // Set the localized date and time on the main window.
@@ -628,7 +628,7 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set battery status on the main window.
-        if let Some(battery_status) = BATTERY_STATUS_UPDATED_SIGNAL.try_take() {
+        if let Ok(battery_status) = BATTERY_STATUS_MUTEX.try_lock() {
             main_window.invoke_update_battery_status(
                 battery_status.0 as i32, // Battery charge percentage
                 battery_status.1 // Is charging
@@ -771,7 +771,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
         }
         // Otherwise signal the UI with the battery level and charge state if they have changed.
         else if battery_status != last_battery_status {
-            BATTERY_STATUS_UPDATED_SIGNAL.signal(battery_status);
+            *BATTERY_STATUS_MUTEX.lock().await = battery_status;
 
             last_battery_status = battery_status;
         }
@@ -928,8 +928,8 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
         // Wait for a smart glasses detection signal.
         SMART_GLASSES_DETECTED_SIGNAL.wait().await;
 
-        // Signal the smart glasses alert as true.
-        SMART_GLASSES_ALERT_SIGNAL.signal(true);
+        // Set the smart glasses alert as true.
+        *SMART_GLASSES_ALERT_MUTEX.lock().await = true;
 
         // Select between..
         let _ = select(
@@ -963,8 +963,8 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
             )
         ).await;
 
-        // Signal the smart glasses alert as false.
-        SMART_GLASSES_ALERT_SIGNAL.signal(false);
+        // Set the smart glasses alert as false.
+        *SMART_GLASSES_ALERT_MUTEX.lock().await = false;
     }
 }
 
@@ -1066,8 +1066,8 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
         // Wait for a Remote Id detection signal.
         REMOTE_ID_DETECTED_SIGNAL.wait().await;
 
-        // Signal the Remote Id alert as true.
-        REMOTE_ID_ALERT_SIGNAL.signal(true);
+        // Set the Remote Id alert as true.
+        *REMOTE_ID_ALERT_MUTEX.lock().await = true;
 
         // Select between..
         let _ = select(
@@ -1101,8 +1101,8 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
             )
         ).await;
 
-        // Signal the Remote Id alert as false.
-        REMOTE_ID_ALERT_SIGNAL.signal(false);
+        // Set the Remote Id alert as false.
+        *REMOTE_ID_ALERT_MUTEX.lock().await = false;
     }
 }
 
