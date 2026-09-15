@@ -257,6 +257,12 @@ async fn main(spawner: Spawner) -> ! {
     let _ = power.init();
     let _ = power.trim_adc_channels();
 
+    // If we woke up on a timer, check the battery charge.
+    // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
+    if let SleepSource::Timer = wakeup_cause() && power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
+        rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
+    }
+
     // Initialize flash storage.
     let flash_storage = Nvs::new(0x9000, 0x14000, FlashStorage::new(peripherals.FLASH))
         .expect("Flash storage initilization failed.");
@@ -266,18 +272,18 @@ async fn main(spawner: Spawner) -> ! {
     // Use an embedded-hal 0.2 proxy to support the haptic motor.
     let i2c_v0_2_proxy = I2cProxyV0_2(static_i2c_ref);
     let mut haptic = Drv2605::new(i2c_v0_2_proxy);
-    
+
     // Initialize the haptic motor.
     let _ = haptic.init_open_loop_erm();
-    
+
     let haptic_static_cell = HAPTIC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(haptic)));
 
-    let settings = Settings::new(flash_storage_static_cell).init();
+    let mut settings = Settings::new(flash_storage_static_cell).init();
 
-    // If we woke up on a timer, check the battery charge.
-    // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
-    if let SleepSource::Timer = wakeup_cause() && power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
-        rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
+    // Use the RTC clock to set the local timestamp after boot.
+    if settings.get_timestamp_offset() == 0 {
+        settings.set_timestamp(rtc.current_time_us() as i64);
+        settings.set_timestamp_offset(Instant::now().as_micros());
     }
 
     let rtc_static_cell = RTC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
@@ -287,7 +293,6 @@ async fn main(spawner: Spawner) -> ! {
     let spi_config = SpiConfig::default()
         .with_frequency(Rate::from_mhz(80))
         .with_mode(SpiMode::_0);
-
     let (rx_buf, rx_desc, tx_buf, tx_desc) = dma_buffers!(8000);
     let dma_rx = DmaRxBuf::new(rx_desc, rx_buf).unwrap();
     let dma_tx = DmaTxBuf::new(tx_desc, tx_buf).unwrap();
@@ -728,8 +733,29 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
 
         // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less..
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
-            SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(SmartGlassesScanTaskCommand::Stop);
-            REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(RemoteIdScanTaskCommand::Stop);
+            // Wait for scans to complete with a join between..
+            join(
+                // Wait for the smart glasses scan to stop..
+                async {
+                    SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(SmartGlassesScanTaskCommand::Stop);
+
+                    loop {
+                        if *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await == SmartGlassesScanTaskState::Stopped {
+                            return;
+                        }
+                    }
+                },
+                // And wait for the remote id scan to stop.
+                async {
+                    REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(RemoteIdScanTaskCommand::Stop);
+
+                    loop {
+                        if *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
+                            return;
+                        }
+                    }
+                }
+            ).await;
 
             let date_time = settings_static_cell.lock(|settings_mutex| {
                 get_date_time(&settings_mutex.borrow_mut())
