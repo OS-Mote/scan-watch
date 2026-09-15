@@ -211,7 +211,7 @@ static REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, Remot
 static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static REMOTE_ID_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
-static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static SMART_GLASSES_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
@@ -845,7 +845,7 @@ impl EventHandler for SmartGlassesScanHandler {
                 if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
                 SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
                     // Signal the instant smart glasses have been detected.
-                    SMART_GLASSES_DETECTED_SIGNAL.signal(Instant::now());
+                    SMART_GLASSES_DETECTED_SIGNAL.signal(());
                 }
             }
         }
