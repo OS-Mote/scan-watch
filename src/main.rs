@@ -140,6 +140,7 @@ mod framebuffer;
 mod axp2101;
 mod co5300;
 mod settings;
+mod i2c_proxy_v0_2;
 
 use crate::{
     settings::{
@@ -153,7 +154,8 @@ use crate::{
         LCD_HEIGHT
     },
     framebuffer::Framebuffer,
-    qspi_bus::QspiBus
+    qspi_bus::QspiBus,
+    i2c_proxy_v0_2::I2cProxyV0_2
 };
 
 #[panic_handler]
@@ -212,34 +214,6 @@ static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal
 static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
 static DATE_TIME_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, DateTime<FixedOffset>> = Signal::new();
-
-pub struct I2cProxyV0_2(&'static RefCell<esp_hal::i2c::master::I2c<'static, esp_hal::Blocking>>);
-
-impl embedded_hal_02::blocking::i2c::WriteRead for I2cProxyV0_2 {
-    type Error = esp_hal::i2c::master::Error;
-
-    fn write_read(
-        &mut self,
-        address: u8,
-        write: &[u8],
-        read: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        // Briefly borrow the I2C bus inside this operation scope
-        let mut guard = self.0.borrow_mut();
-        let mut v0_2_adapter = (&mut *guard).reverse();
-        v0_2_adapter.write_read(address, write, read)
-    }
-}
-
-impl embedded_hal_02::blocking::i2c::Write for I2cProxyV0_2 {
-    type Error = esp_hal::i2c::master::Error;
-
-    fn write(&mut self, address: u8, write: &[u8]) -> Result<(), Self::Error> {
-        let mut guard = self.0.borrow_mut();
-        let mut v0_2_adapter = (&mut *guard).reverse();
-        v0_2_adapter.write(address, write)
-    }
-}
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -391,22 +365,22 @@ async fn main(spawner: Spawner) -> ! {
             .unwrap_or_default()
             .to_utc();
 
-        settings_static_cell.lock(|settings| {
-            let mut settings = settings.borrow_mut();
+        settings_static_cell.lock(|settings_mutex| {
+            let mut settings = settings_mutex.borrow_mut();
 
             settings.set_timestamp(adjusted_datetime.timestamp_micros());
             settings.set_timestamp_offset(Instant::now().as_micros());
         });
 
-        rtc_static_cell.lock(|rtc| {
-            rtc.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
+        rtc_static_cell.lock(|rtc_mutex| {
+            rtc_mutex.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
         });
     });
 
     // Get localized date.
     main_window.on_get_date(|| {
-        let date_time = settings_static_cell.lock(|settings| {
-            get_date_time(&settings.borrow())
+        let date_time = settings_static_cell.lock(|settings_mutex| {
+            get_date_time(&settings_mutex.borrow())
         });
 
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
@@ -433,22 +407,22 @@ async fn main(spawner: Spawner) -> ! {
             .unwrap_or_default()
             .to_utc();
 
-        settings_static_cell.lock(|settings| {
-            let mut settings = settings.borrow_mut();
+        settings_static_cell.lock(|settings_mutex| {
+            let mut settings = settings_mutex.borrow_mut();
 
             settings.set_timestamp(adjusted_datetime.timestamp_micros());
             settings.set_timestamp_offset(Instant::now().as_micros());
         });
 
-        rtc_static_cell.lock(|rtc| {
-            rtc.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
+        rtc_static_cell.lock(|rtc_mutex| {
+            rtc_mutex.borrow_mut().set_current_time_us(adjusted_datetime.timestamp_micros() as u64);
         });
     });
 
     // Get localized time.
     main_window.on_get_time(|| {
-        let date_time = settings_static_cell.lock(|settings| {
-            get_date_time(&settings.borrow())
+        let date_time = settings_static_cell.lock(|settings_mutex| {
+            get_date_time(&settings_mutex.borrow())
         });
 
         let model: Rc<VecModel<i32>> = Rc::new(VecModel::from(vec![
@@ -462,89 +436,89 @@ async fn main(spawner: Spawner) -> ! {
 
     // Set the timezone offset.
     main_window.on_set_timezone_offset(|offset| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_timezone_offset(offset);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_timezone_offset(offset);
         });
     });
 
     // Get the timezone offset.
     main_window.on_get_timezone_offset(|| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow().get_timezone_offset()
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow().get_timezone_offset()
         })
     });
 
     // Set the clock twelve-hour setting.
     main_window.on_set_clock_twelve_hour(|clock_twelve_hour| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_clock_twelve_hour(clock_twelve_hour);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_clock_twelve_hour(clock_twelve_hour);
         });
     });
 
     // Set the screen brightness setting and change the display brightness.
     main_window.on_set_screen_brightness(|brightness| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_display_brightness(brightness as u8);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_display_brightness(brightness as u8);
         });
 
-        display_static_cell.lock(|display| {
-            display.borrow_mut().set_brightness(brightness as u8);
+        display_static_cell.lock(|display_mutex| {
+            display_mutex.borrow_mut().set_brightness(brightness as u8);
         });
     });
 
     // Set the screen brightness setting.
     main_window.on_get_screen_brightness(|| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow().get_display_brightness() as i32
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow().get_display_brightness() as i32
         })
     });
 
     // Set the screen timeout setting.
     main_window.on_set_screen_timeout(|timeout| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_display_timeout(timeout as u8);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_display_timeout(timeout as u8);
         });
     });
 
     // Get the screen timeout setting.
     main_window.on_get_screen_timeout(|| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow().get_display_timeout() as i32
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow().get_display_timeout() as i32
         })
     });
 
     // Set the screen dark mode setting.
     main_window.on_set_display_dark_mode(|dark_mode| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_display_dark_mode(dark_mode);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_display_dark_mode(dark_mode);
         });
     });
 
     // Set the smart glasses scan duration.
     main_window.on_set_smart_glasses_scan_duration(|duration| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_smart_glasses_scan_duration(duration as u8);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_smart_glasses_scan_duration(duration as u8);
         });
     });
 
     // Get the smart glasses scan duration.
     main_window.on_get_smart_glasses_scan_duration(|| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow().get_smart_glasses_scan_duration() as i32
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow().get_smart_glasses_scan_duration() as i32
         })
     });
 
     // Set the Remote Id scan duration.
     main_window.on_set_remote_id_scan_duration(|duration| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow_mut().set_remote_id_scan_duration(duration as u8);
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow_mut().set_remote_id_scan_duration(duration as u8);
         });
     });
 
     // Get the Remote Id scan duration.
     main_window.on_get_remote_id_scan_duration(|| {
-        settings_static_cell.lock(|settings| {
-            settings.borrow().get_remote_id_scan_duration() as i32
+        settings_static_cell.lock(|settings_mutex| {
+            settings_mutex.borrow().get_remote_id_scan_duration() as i32
         })
     });
 
@@ -571,26 +545,26 @@ async fn main(spawner: Spawner) -> ! {
     
     // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
-        if let Ok(mut flashlight) = FLASHLIGHT_ON_MUTEX.try_lock() {
+        if let Ok(mut flashlight_mutex) = FLASHLIGHT_ON_MUTEX.try_lock() {
             // If the flashlight is on..
-            if on {
+            if *flashlight_mutex {
                 display_static_cell.lock(|display| {
                     // Set the display brightness to maximum.
                     display.borrow_mut().set_brightness(255);
                 });
             // Else if the flashlight is off..
             } else {
-                let brightness = settings_static_cell.lock(|settings| {
-                    settings.borrow().get_display_brightness()
+                let brightness = settings_static_cell.lock(|settings_mutex| {
+                    settings_mutex.borrow().get_display_brightness()
                 });
 
                 // Set the brightness to the user defined value.
-                display_static_cell.lock(|display| {
-                    display.borrow_mut().set_brightness(brightness);
+                display_static_cell.lock(|display_mutex| {
+                    display_mutex.borrow_mut().set_brightness(brightness);
                 });
             }
 
-            *flashlight = on;
+            *flashlight_mutex = on;
         }
     });
 
@@ -658,8 +632,8 @@ async fn main(spawner: Spawner) -> ! {
         if software_window.draw_if_needed(|renderer| {
             renderer.render(framebuffer.as_rgb565_pixels_mut(), LCD_WIDTH as usize);
         }) {
-            display_static_cell.lock(|display| {
-                framebuffer.flush_vsync(&mut display.borrow_mut(), &te_pin);
+            display_static_cell.lock(|display_mutex| {
+                framebuffer.flush_vsync(&mut display_mutex.borrow_mut(), &te_pin);
             });
         }
 
@@ -672,8 +646,8 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
     let mut last_touch_point: Option<TouchPoint> = None;
 
     loop {
-        if let Ok(touches) = touch_static_cell.lock(|touch| {
-            touch.borrow_mut().touches()
+        if let Ok(touches) = touch_static_cell.lock(|touch_mutex| {
+            touch_mutex.borrow_mut().touches()
         }) {
             // We only care about one-finger touches.
             if let Some(Some(touch_point)) = touches.first() {
@@ -688,8 +662,8 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
                     // Else this is a new touch.
                     } else {
                         // Use the haptic motor to send a "click" vibration to the user.
-                        haptic_static_cell.lock(|haptic| {
-                            let mut haptic = haptic.borrow_mut();
+                        haptic_static_cell.lock(|haptic_mutex| {
+                            let mut haptic = haptic_mutex.borrow_mut();
 
                             let _ = haptic.set_single_effect(Effect::StrongClick100);
                             let _ = haptic.set_go(true);
@@ -723,8 +697,8 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
 #[task]
 async fn date_time_update_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
-        let date_time = settings_static_cell.lock(|settings| {
-            get_date_time(&settings.borrow())
+        let date_time = settings_static_cell.lock(|settings_mutex| {
+            get_date_time(&settings_mutex.borrow())
         });
 
         DATE_TIME_UPDATED_SIGNAL.signal(date_time);
@@ -739,8 +713,8 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
 
     loop {
         // Get the battery status as charge percentage and charge status.
-        let battery_status = power_static_cell.lock(|power| {
-            let mut power = power.borrow_mut();
+        let battery_status = power_static_cell.lock(|power_mutex| {
+            let mut power = power_mutex.borrow_mut();
 
             (
                 power.get_battery_percent().unwrap_or(0),
@@ -755,12 +729,12 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
             SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(SmartGlassesScanTaskCommand::Stop);
             REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(RemoteIdScanTaskCommand::Stop);
 
-            let date_time = settings_static_cell.lock(|settings| {
-                get_date_time(&settings.borrow_mut())
+            let date_time = settings_static_cell.lock(|settings_mutex| {
+                get_date_time(&settings_mutex.borrow_mut())
             });
 
-            rtc_static_cell.lock(|rtc| {
-                let mut rtc = rtc.borrow_mut();
+            rtc_static_cell.lock(|rtc_mutex| {
+                let mut rtc = rtc_mutex.borrow_mut();
 
                 // Update the RTC with the current time.
                 rtc.set_current_time_us(date_time.timestamp_micros() as u64);
@@ -790,9 +764,9 @@ async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSe
 
                 // And the display is not on..
                 if !*display_on {
-                    display_static_cell.lock(|display| {
+                    display_static_cell.lock(|display_mutex| {
                         // Turn on the display..
-                        display.borrow_mut().display_on();
+                        display_mutex.borrow_mut().display_on();
                     });
 
                     // Set the display on flag.
@@ -800,15 +774,15 @@ async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSe
                 }
             // Else start the display time-out countdown if the flashlight is not on and the time-out is positive.
             } else if !*FLASHLIGHT_ON_MUTEX.lock().await {
-                let display_timeout = settings_static_cell.lock(|settings| {
-                    settings.borrow().get_display_timeout()
+                let display_timeout = settings_static_cell.lock(|settings_mutex| {
+                    settings_mutex.borrow().get_display_timeout()
                 });
 
                 // If the display has been on longer or equal to the display timeout setting..
                 if Instant::now().duration_since(last_touch_instant).as_secs() >= display_timeout as u64 && *display_on {
-                    display_static_cell.lock(|display| {
+                    display_static_cell.lock(|display_mutex| {
                         // Turn off the display..
-                        display.borrow_mut().display_off();
+                        display_mutex.borrow_mut().display_off();
                     });
 
                     // And set the display on flag.
@@ -895,8 +869,8 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
                 select(
                     // The scan duration future..
                     async {
-                        let scan_duration = settings_static_cell.lock(|settings| {
-                            settings.borrow().get_smart_glasses_scan_duration()
+                        let scan_duration = settings_static_cell.lock(|settings_mutex| {
+                            settings_mutex.borrow().get_smart_glasses_scan_duration()
                         }) as u64;
 
                         Timer::after_secs(scan_duration).await;
@@ -932,8 +906,8 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
         let _ = select(
             // Repeatedly triggering a haptic alert..
             async {
-                haptic_static_cell.lock(|haptic| {
-                    let mut haptic = haptic.borrow_mut();
+                haptic_static_cell.lock(|haptic_mutex| {
+                    let mut haptic = haptic_mutex.borrow_mut();
 
                     let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
                     let _ = haptic.set_go(true);
@@ -1027,8 +1001,8 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                 select(
                     // The scan duration future..
                     async {
-                        let scan_duration = settings_static_cell.lock(|settings| {
-                            settings.borrow().get_remote_id_scan_duration()
+                        let scan_duration = settings_static_cell.lock(|settings_mutex| {
+                            settings_mutex.borrow().get_remote_id_scan_duration()
                         }) as u64;
 
                         Timer::after_secs(scan_duration).await;
