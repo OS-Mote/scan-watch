@@ -733,7 +733,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
 
         // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less..
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
-            // Wait for scans to complete with a join between..
+            // Stop and wait for scans to complete with a join between..
             join(
                 // Wait for the smart glasses scan to stop..
                 async {
