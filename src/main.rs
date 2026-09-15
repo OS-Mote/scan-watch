@@ -943,19 +943,27 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
 
                 Timer::after_millis(250).await;
             },
-            // And polling for SCAN_ALERT_DURATION since the last smart glasses detection or for the smart glasses scan task state to be Stopped.
-            async {
-                loop {
-                    if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 || *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await == SmartGlassesScanTaskState::Stopped {
-                        // Signal the smart glasses alert as false.
-                        SMART_GLASSES_ALERT_SIGNAL.signal(false);
+            // And polling a select between..
+            select(
+                // Polling for SCAN_ALERT_DURATION since the last smart glasses detection
+                async {
+                    loop {
+                        if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 {
+                            return;
+                        }
 
-                        return;
+                        Timer::after_millis(16).await;
                     }
-
-                    Timer::after_millis(16).await;
+                },
+                async {
+                    // Waiting for the smarg glasses scan task state to be Stopped.
+                    loop {
+                        if *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await == SmartGlassesScanTaskState::Stopped {
+                            return;
+                        }
+                    }
                 }
-            }
+            )
         ).await;
     }
 }
@@ -1074,20 +1082,31 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
 
                 Timer::after_millis(250).await;
             },
-            // And polling for SCAN_ALERT_DURATION since the last Remote Id detection or for the Remote Id scan task state to be Stopped.
-            async {
-                loop {
-                    if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 || *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
-                        // Signal the Remote Id alert as false.
-                        REMOTE_ID_ALERT_SIGNAL.signal(false);
+            // And polling a select between..
+            select(
+                // Polling for SCAN_ALERT_DURATION since the last Remote Id detection
+                async {
+                    loop {
+                        if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 {
+                            return;
+                        }
 
-                        return;
+                        Timer::after_millis(16).await;
                     }
-
-                    Timer::after_millis(16).await;
+                },
+                async {
+                    // Waiting for the Remote Id scan task state to be Stopped.
+                    loop {
+                        if *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
+                            return;
+                        }
+                    }
                 }
-            }
+            )
         ).await;
+
+        // Signal the Remote Id alert as false.
+        REMOTE_ID_ALERT_SIGNAL.signal(false);
     }
 }
 
