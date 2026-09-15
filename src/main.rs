@@ -548,7 +548,7 @@ async fn main(spawner: Spawner) -> ! {
     main_window.on_set_smart_glasses_scan_task_command(|command| {
         SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(command);
     });
-    
+
     // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
         if let Ok(mut flashlight_mutex) = FLASHLIGHT_ON_MUTEX.try_lock() {
@@ -944,7 +944,7 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
 
                 Timer::after_millis(250).await;
             },
-            // And polling a select between..
+            // And a select between..
             select(
                 // Waiting for SCAN_ALERT_DURATION since the smart glasses detection
                 async {
@@ -1082,7 +1082,7 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
 
                 Timer::after_millis(250).await;
             },
-            // And polling a select between..
+            // And a select between..
             select(
                 // Waiting for SCAN_ALERT_DURATION since the Remote Id detection
                 async {
