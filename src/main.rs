@@ -142,7 +142,10 @@ mod co5300;
 mod settings;
 
 use crate::{
-    settings::Settings,
+    settings::{
+        Settings,
+        SCAN_ALERT_DURATION
+    },
     axp2101::Axp2101,
     co5300::{
         Co5300Display,
@@ -201,8 +204,10 @@ static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true)
 
 static REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
 static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static REMOTE_ID_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
 static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static SMART_GLASSES_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
 static BATTERY_STATUS_UPDATED_SIGNAL: Signal<CriticalSectionRawMutex, (u8, bool)> = Signal::new();
@@ -594,39 +599,28 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(date_time_update_task(settings_static_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_static_cell, settings_static_cell).unwrap());
     spawner.spawn(remote_id_sniffing_task(settings_static_cell).unwrap());
+    spawner.spawn(remote_id_alert_task(haptic_static_cell).unwrap());
     spawner.spawn(smart_glasses_scan_task(settings_static_cell).unwrap());
-
-    let mut last_smart_glasses_detection: Option<Instant> = None;
-    let mut last_remote_id_detection: Option<Instant> = None;
+    spawner.spawn(smart_glasses_alert_task(haptic_static_cell).unwrap());
 
     main_window.show().unwrap();
 
     loop {
         slint::platform::update_timers_and_animations();
 
+        // Dispatch any pending touch events.
         if let Some(touch_event) = DISPLAY_TOUCH_EVENT_SIGNAL.try_take() {
             software_window.dispatch_event(touch_event);
         }
-
-        // Fixme
 
         // Set the Remote Id scan task state on the main window.
         if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE_MUTEX.try_lock() {
             main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
         }
 
-        // If a Remote Id device has been detected set the status on the main window..
-        if let Some(remote_id_detected) = REMOTE_ID_DETECTED_SIGNAL.try_take() {
-            last_remote_id_detection = Some(remote_id_detected);
-
-            main_window.set_remote_id_detected(true);
-        // Else clear the Remote Id detection status after 30 seconds.
-        } else {
-            if let Some(detection) = last_remote_id_detection && detection.elapsed().as_secs() >= 30 {
-                last_remote_id_detection = None;
-
-                main_window.set_remote_id_detected(false);
-            }
+        // Set the Remote Id alert on the main window.
+        if let Some(remote_id_alert) = REMOTE_ID_ALERT_SIGNAL.try_take() {
+            main_window.set_remote_id_detected(remote_id_alert);
         }
 
         // Set the smart glasses scan task state on the main window.
@@ -634,18 +628,9 @@ async fn main(spawner: Spawner) -> ! {
             main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
         }
 
-        // If smart glasses have been detected set the status on the main window..
-        if let Some(smart_glasses_detected) = SMART_GLASSES_DETECTED_SIGNAL.try_take() {
-            last_smart_glasses_detection = Some(smart_glasses_detected);
-
-            main_window.set_smart_glasses_detected(true);
-        // Else clear the smart glasses detection status after 30 seconds.
-        } else {
-            if let Some(detection) = last_smart_glasses_detection && detection.elapsed().as_secs() >= 30 {
-                last_smart_glasses_detection = None;
-
-                main_window.set_smart_glasses_detected(false);
-            }
+        // Set the smart glasses alert on the main window.
+        if let Some(smart_glasses_alert) = SMART_GLASSES_ALERT_SIGNAL.try_take() {
+            main_window.set_smart_glasses_detected(smart_glasses_alert)
         }
 
         // Set the localized date and time on the main window.
@@ -669,6 +654,7 @@ async fn main(spawner: Spawner) -> ! {
             );
         }
 
+        // Draw UI updates and flush the framebuffer.
         if software_window.draw_if_needed(|renderer| {
             renderer.render(framebuffer.as_rgb565_pixels_mut(), LCD_WIDTH as usize);
         }) {
@@ -934,6 +920,45 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
 }
 
 #[task]
+async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>) {
+    loop {
+        // Wait for a smart glasses detection signal.
+        let alert_instant = SMART_GLASSES_DETECTED_SIGNAL.wait().await;
+
+        // Signal the smart glasses alert as true.
+        SMART_GLASSES_ALERT_SIGNAL.signal(true);
+
+        // Select between..
+        let _ = select(
+            // Repeatedly triggering a haptic alert..
+            async {
+                haptic_static_cell.lock(|haptic| {
+                    let mut haptic = haptic.borrow_mut();
+
+                    let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
+                    let _ = haptic.set_go(true);
+                });
+
+                Timer::after_millis(250).await;
+            },
+            // And polling for SCAN_ALERT_DURATION since the last smart glasses detection or for the smart glasses scan task state to be Stopped.
+            async {
+                loop {
+                    if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 || *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await == SmartGlassesScanTaskState::Stopped {
+                        // Signal the smart glasses alert as false.
+                        SMART_GLASSES_ALERT_SIGNAL.signal(false);
+
+                        return;
+                    }
+
+                    Timer::after_millis(16).await;
+                }
+            }
+        ).await;
+    }
+}
+
+#[task]
 async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
         if RemoteIdScanTaskCommand::Start == REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.wait().await {
@@ -1022,6 +1047,45 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             // Set the Remote Id scan state as stopped.
             *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Stopped;
         }
+    }
+}
+
+#[task]
+async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>) {
+    loop {
+        // Wait for a Remote Id detection signal.
+        let alert_instant = REMOTE_ID_DETECTED_SIGNAL.wait().await;
+
+        // Signal the Remote Id alert as true.
+        REMOTE_ID_ALERT_SIGNAL.signal(true);
+
+        // Select between..
+        let _ = select(
+            // Repeatedly triggering a haptic alert..
+            async {
+                haptic_static_cell.lock(|haptic| {
+                    let mut haptic = haptic.borrow_mut();
+
+                    let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
+                    let _ = haptic.set_go(true);
+                });
+
+                Timer::after_millis(250).await;
+            },
+            // And polling for SCAN_ALERT_DURATION since the last Remote Id detection or for the Remote Id scan task state to be Stopped.
+            async {
+                loop {
+                    if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 || *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
+                        // Signal the Remote Id alert as false.
+                        REMOTE_ID_ALERT_SIGNAL.signal(false);
+
+                        return;
+                    }
+
+                    Timer::after_millis(16).await;
+                }
+            }
+        ).await;
     }
 }
 
