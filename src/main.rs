@@ -208,7 +208,7 @@ static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(fa
 static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 
 static REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdScanTaskCommand> = Signal::new();
-static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
+static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static REMOTE_ID_ALERT_SIGNAL: Signal<CriticalSectionRawMutex, bool> = Signal::new();
 static SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesScanTaskCommand> = Signal::new();
 static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
@@ -818,6 +818,7 @@ async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSe
                 }
             }
         }
+
         Timer::after_millis(16).await;
     }
 }
@@ -925,7 +926,7 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
 async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>) {
     loop {
         // Wait for a smart glasses detection signal.
-        let alert_instant = SMART_GLASSES_DETECTED_SIGNAL.wait().await;
+        SMART_GLASSES_DETECTED_SIGNAL.wait().await;
 
         // Signal the smart glasses alert as true.
         SMART_GLASSES_ALERT_SIGNAL.signal(true);
@@ -945,18 +946,14 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
             },
             // And polling a select between..
             select(
-                // Polling for SCAN_ALERT_DURATION since the last smart glasses detection
+                // Waiting for SCAN_ALERT_DURATION since the smart glasses detection
                 async {
                     loop {
-                        if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 {
-                            return;
-                        }
-
-                        Timer::after_millis(16).await;
+                        Timer::after_secs(SCAN_ALERT_DURATION).await;
                     }
                 },
                 async {
-                    // Waiting for the smarg glasses scan task state to be Stopped.
+                    // Waiting for the smart glasses scan task state to be Stopped.
                     loop {
                         if *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await == SmartGlassesScanTaskState::Stopped {
                             return;
@@ -996,7 +993,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                             // And the payload prefix matches Remote Id..
                             if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
                                 // Signal the instant a Remote Id packet has been detected.
-                                REMOTE_ID_DETECTED_SIGNAL.signal(Instant::now());
+                                REMOTE_ID_DETECTED_SIGNAL.signal(());
                             }
                         }
                     }
@@ -1004,7 +1001,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                         // If the frame has a vendor payload that mathes Remote Id..
                         if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
                             // Signal the instant a Remote Id packet has been detected.
-                            REMOTE_ID_DETECTED_SIGNAL.signal(Instant::now());
+                            REMOTE_ID_DETECTED_SIGNAL.signal(());
                         }
                     }
                 };
@@ -1064,7 +1061,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
 async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>) {
     loop {
         // Wait for a Remote Id detection signal.
-        let alert_instant = REMOTE_ID_DETECTED_SIGNAL.wait().await;
+        REMOTE_ID_DETECTED_SIGNAL.wait().await;
 
         // Signal the Remote Id alert as true.
         REMOTE_ID_ALERT_SIGNAL.signal(true);
@@ -1084,14 +1081,10 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
             },
             // And polling a select between..
             select(
-                // Polling for SCAN_ALERT_DURATION since the last Remote Id detection
+                // Waiting for SCAN_ALERT_DURATION since the Remote Id detection
                 async {
                     loop {
-                        if Instant::now().duration_since(alert_instant).as_secs() >= SCAN_ALERT_DURATION as u64 {
-                            return;
-                        }
-
-                        Timer::after_millis(16).await;
+                        Timer::after_secs(SCAN_ALERT_DURATION).await;
                     }
                 },
                 async {

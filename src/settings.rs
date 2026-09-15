@@ -33,7 +33,7 @@ const SMART_GLASSES_SCAN_DURATION_DEFAULT: u8 = 15;
 const REMOTE_ID_SCAN_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
 const REMOTE_ID_SCAN_DURATION_DEFAULT: u8 = 15;
 
-pub const SCAN_ALERT_DURATION: u8 = 15;
+pub const SCAN_ALERT_DURATION: u64 = 15;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,
