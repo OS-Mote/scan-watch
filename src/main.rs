@@ -29,20 +29,29 @@ use chrono::{
     Timelike
 };
 use esp_hal::{
-    delay::Delay, dma::{
+    delay::Delay,
+    dma::{
         DmaRxBuf,
         DmaTxBuf
-    }, dma_buffers, gpio::{
+    },
+    dma_buffers,
+    gpio::{
         AnyPin,
         Input,
         InputConfig,
         Level,
         Output,
         OutputConfig
-    }, i2c::master::{
+    },
+    i2c::master::{
         Config as I2cConfig,
         I2c
-    }, peripherals::{BT, FLASH}, rtc_cntl::{
+    }, 
+    peripherals::{
+        BT, 
+        FLASH
+    },
+    rtc_cntl::{
         Rtc,
         SocResetReason,
         sleep::{
@@ -50,19 +59,21 @@ use esp_hal::{
             TimerWakeupSource,
             WakeupLevel
         },
-    }, spi::{
+    },
+    spi::{
         Mode as SpiMode,
         master::{
             Config as SpiConfig,
             Spi
         }
-    }, system::{
+    },
+    system::{
         SleepSource,
         reset_reason,
         wakeup_cause
     },
     time::Rate,
-    timer::timg::TimerGroup,
+    timer::timg::TimerGroup
 };
 use esp_storage::FlashStorage;
 use esp_nvs::{
@@ -70,7 +81,8 @@ use esp_nvs::{
     Key
 };
 use esp_radio::{
-    ble::controller::BleConnector, wifi::{
+    ble::controller::BleConnector,
+    wifi::{
         self,
         SecondaryChannel,
         WifiController,
@@ -78,11 +90,11 @@ use esp_radio::{
     }
 };
 use embassy_sync::{
-    blocking_mutex,
-    blocking_mutex::CriticalSectionMutex,
-    mutex,
     mutex::Mutex,
-    blocking_mutex::raw::CriticalSectionRawMutex,
+    blocking_mutex::{
+        CriticalSectionMutex,
+        raw::CriticalSectionRawMutex
+    },
     signal::Signal,
     channel::Channel
 };
@@ -112,7 +124,8 @@ use core::{
 };
 use embedded_hal_bus::i2c::RefCellDevice;
 use embedded_graphics::{
-    pixelcolor::Rgb565, prelude::*
+    prelude::*,
+    pixelcolor::Rgb565
 };
 use slint::{
     VecModel,
