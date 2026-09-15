@@ -104,7 +104,7 @@ export component MainWindow inherits Window {
     height: 502px;
     background: black;
     default-font-family: "SF Pro Rounded";
-    default-font-size: 32px;
+    default-font-size: 28px;
 
     watch-view := Rectangle {
         property <int> hour: 0;
@@ -273,42 +273,36 @@ export component MainWindow inherits Window {
             Flickable {
                 VerticalLayout {
                     TextButton {
-                        height: 96px;
                         text: "Date";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.date; }
                     }
                     TextButton {
-                        height: 96px;
                         text: "Time";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.time; }
                     }
                     TextButton {
-                        height: 96px;
                         text: "Timezone";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.timezone; }
                     }
                     TextButton {
-                        height: 96px;
                         text: "Clock";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.clock; }
                     }
                     TextButton {
-                        height: 96px;
                         text: "Screen";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.screen; }
                     }
                     TextButton {
-                        height: 96px;
                         text: "Scan Duration";
                         color: root.dark-mode ? red : white;
 
@@ -339,7 +333,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "Year";
@@ -436,7 +429,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "Hour";
@@ -525,7 +517,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "Offset";
@@ -580,7 +571,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "12-Hour";
@@ -628,7 +618,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "Brightness";
@@ -720,7 +709,6 @@ export component MainWindow inherits Window {
                         vertical-alignment: top;
                         horizontal-alignment: center;
                     }
-                    Rectangle {}
                     HorizontalLayout {
                         Text {
                             text: "Smart Glasses";
