@@ -279,16 +279,16 @@ export component MainWindow inherits Window {
                         clicked => { showing-settings-view = SettingsView.date; }
                     }
                     TextButton {
-                        text: "Time";
-                        color: root.dark-mode ? red : white;
-
-                        clicked => { showing-settings-view = SettingsView.time; }
-                    }
-                    TextButton {
                         text: "Timezone";
                         color: root.dark-mode ? red : white;
 
                         clicked => { showing-settings-view = SettingsView.timezone; }
+                    }
+                    TextButton {
+                        text: "Time";
+                        color: root.dark-mode ? red : white;
+
+                        clicked => { showing-settings-view = SettingsView.time; }
                     }
                     TextButton {
                         text: "Clock";
@@ -396,7 +396,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
-                            color: red;
+                            color: root.dark-mode ? yellow : red;
                             clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
@@ -405,6 +405,60 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
+
+                                showing-settings-view = SettingsView.none;
+                            }
+                        }
+                    }
+
+                    spacing: 16px;
+                    padding: 32px;
+                }
+            }
+
+            background: black;
+        }
+
+        if showing-settings-view == SettingsView.timezone : Rectangle {
+            TouchArea {
+                VerticalLayout {
+                    Text {
+                        text: "Timezone";
+                        color: root.dark-mode ? red : white;
+                        font-size: 48px;
+                        vertical-alignment: top;
+                        horizontal-alignment: center;
+                    }
+                    HorizontalLayout {
+                        Text {
+                            text: "Offset";
+                            color: root.dark-mode ? red : white;
+                        }
+                        Text {
+                            text: round(timezone-slider.value);
+                            color: root.dark-mode ? red : white;
+                            vertical-alignment: top;
+                            horizontal-alignment: right;
+                        }
+                    }
+                    timezone-slider := Slider{
+                        value: root.get-timezone-offset();
+                        minimum: -23;
+                        maximum: 23;
+                    }
+                    Rectangle {}
+                    HorizontalLayout {
+                        TextButton {
+                            text: "Cancel";
+                            color: root.dark-mode ? yellow : red;
+                            clicked => { showing-settings-view = SettingsView.none; }
+                        }
+                        TextButton {
+                            text: "Done";
+                            color: root.dark-mode ? red : white;
+
+                            clicked => {
+                                root.set-timezone-offset(round(timezone-slider.value));
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -484,7 +538,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
-                            color: red;
+                            color: root.dark-mode ? yellow : red;
                             clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
@@ -493,60 +547,6 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-time(round(hour-slider.value), round(minute-slider.value), round(second-slider.value));
-
-                                showing-settings-view = SettingsView.none;
-                            }
-                        }
-                    }
-
-                    spacing: 16px;
-                    padding: 32px;
-                }
-            }
-
-            background: black;
-        }
-
-        if showing-settings-view == SettingsView.timezone : Rectangle {
-            TouchArea {
-                VerticalLayout {
-                    Text {
-                        text: "Timezone";
-                        color: root.dark-mode ? red : white;
-                        font-size: 48px;
-                        vertical-alignment: top;
-                        horizontal-alignment: center;
-                    }
-                    HorizontalLayout {
-                        Text {
-                            text: "Offset";
-                            color: root.dark-mode ? red : white;
-                        }
-                        Text {
-                            text: round(timezone-slider.value);
-                            color: root.dark-mode ? red : white;
-                            vertical-alignment: top;
-                            horizontal-alignment: right;
-                        }
-                    }
-                    timezone-slider := Slider{
-                        value: root.get-timezone-offset();
-                        minimum: -23;
-                        maximum: 23;
-                    }
-                    Rectangle {}
-                    HorizontalLayout {
-                        TextButton {
-                            text: "Cancel";
-                            color: red;
-                            clicked => { showing-settings-view = SettingsView.none; }
-                        }
-                        TextButton {
-                            text: "Done";
-                            color: root.dark-mode ? red : white;
-
-                            clicked => {
-                                root.set-timezone-offset(round(timezone-slider.value));
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -585,7 +585,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
-                            color: red;
+                            color: root.dark-mode ? yellow : red;
                             clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
@@ -674,7 +674,7 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
-                            color: red;
+                            color: root.dark-mode ? yellow : red;
                             clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
@@ -755,11 +755,12 @@ export component MainWindow inherits Window {
                     HorizontalLayout {
                         TextButton {
                             text: "Cancel";
-                            color: red;
+                            color: root.dark-mode ? yellow : red;
                             clicked => { showing-settings-view = SettingsView.none; }
                         }
                         TextButton {
                             text: "Done";
+                            color: root.dark-mode ? red : white;
                             clicked => {
                                 root.set-smart-glasses-scan-duration(round(smart-glasses-scan-duration-slider.value));
                                 root.set-remote-id-scan-duration(round(remote-id-scan-duration-slider.value));

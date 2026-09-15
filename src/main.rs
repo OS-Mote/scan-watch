@@ -272,15 +272,13 @@ async fn main(spawner: Spawner) -> ! {
     
     let haptic_static_cell = HAPTIC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(haptic)));
 
-    let mut settings = Settings::new(flash_storage_static_cell).init();
+    let settings = Settings::new(flash_storage_static_cell).init();
 
     // If we woke up on a timer, check the battery charge.
     // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
     if let SleepSource::Timer = wakeup_cause() && power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
         rtc.sleep_deep(&[&TimerWakeupSource::new(Duration::from_secs(SLEEP_SECONDS_FOR_CHARING))]);
     }
-
-    settings.set_timestamp(rtc.current_time_us() as i64);
 
     let rtc_static_cell = RTC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
     let power_static_cell = POWER_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
