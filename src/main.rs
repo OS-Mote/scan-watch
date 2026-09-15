@@ -36,7 +36,6 @@ use esp_hal::{
     },
     dma_buffers,
     gpio::{
-        AnyPin,
         Input,
         InputConfig,
         Level,
@@ -48,16 +47,12 @@ use esp_hal::{
         I2c
     }, 
     peripherals::{
-        BT, 
-        FLASH
+        BT
     },
     rtc_cntl::{
         Rtc,
-        SocResetReason,
         sleep::{
-            Ext0WakeupSource,
             TimerWakeupSource,
-            WakeupLevel
         },
     },
     spi::{
@@ -69,7 +64,6 @@ use esp_hal::{
     },
     system::{
         SleepSource,
-        reset_reason,
         wakeup_cause
     },
     time::Rate,
@@ -77,16 +71,12 @@ use esp_hal::{
 };
 use esp_storage::FlashStorage;
 use esp_nvs::{
-    Nvs,
-    Key
+    Nvs
 };
 use esp_radio::{
     ble::controller::BleConnector,
     wifi::{
-        self,
-        SecondaryChannel,
-        WifiController,
-        sniffer::Sniffer
+        SecondaryChannel
     }
 };
 use embassy_sync::{
@@ -95,8 +85,7 @@ use embassy_sync::{
         CriticalSectionMutex,
         raw::CriticalSectionRawMutex
     },
-    signal::Signal,
-    channel::Channel
+    signal::Signal
 };
 use embassy_executor::{
     task,

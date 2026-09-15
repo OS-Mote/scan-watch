@@ -18,70 +18,35 @@ name = "scan-watch"
 path = "./src/main.rs"
 
 [dependencies]
-slint = { version = "1.17.1", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
-esp-hal = { version = "1.1.1", default-features = false, features = ["esp32s3", "unstable"] }
-chrono = { version = "0.4.45", default-features = false }
-
-esp-rtos = { version = "0.3.0", features = [
-  "embassy",
-  "esp-alloc",
-  "esp-radio",
-  "esp32s3",
-] }
-
-esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32s3"] }
-
-# embassy-net = { version = "0.9.1", features = [
-#   "dhcpv4",
-#   "medium-ethernet",
-#   "tcp",
-#   "udp",
-# ] }
-embedded-io = "0.7.1"
-embedded-io-async = "0.7.0"
-esp-alloc = "0.10.0"
-# for more networking protocol support see https://crates.io/crates/edge-net
-bt-hci = "0.8.0"
-embassy-executor = { version = "0.10.0", features = [] }
-embassy-time = "0.5.0"
-esp-radio = { version = "0.18.0", features = ["ble", "coex", "esp-alloc", "esp32s3", "unstable", "wifi", "sniffer"] }
-# smoltcp = { version = "0.13.0", default-features = false, features = [
-#   "medium-ethernet",
-#   "multicast",
-#   "proto-dhcpv4",
-#   "proto-dns",
-#   "proto-ipv4",
-#   "socket-dns",
-#   "socket-icmp",
-#   "socket-raw",
-#   "socket-tcp",
-#   "socket-udp",
-# ] }
-trouble-host = { version = "0.6.0", features = ["gatt", "scan"] }
 critical-section = "1.2.0"
 static_cell      = "2.1.1"
+esp-alloc = "0.10.0"
 esp-println = { version = "0.17.0", features = ["esp32s3"] }
-ieee80211 = "0.5.9"
+esp-hal = { version = "1.1.1", default-features = false, features = ["esp32s3", "unstable"] }
+esp-rtos = { version = "0.3.0", features = ["embassy", "esp-alloc", "esp-radio", "esp32s3"] }
+esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32s3"] }
+esp-radio = { version = "0.18.0", features = ["ble", "coex", "esp-alloc", "esp32s3", "unstable", "wifi", "sniffer"] }
+esp-nvs = { version = "0.5.0", features = ["esp32s3"] }
+esp-storage = { version = "0.9.0", features = ["esp32s3"] }
+embedded-hal = "1.0.0"
+embedded-hal-bus = "0.3.0"
+embedded-hal-compat = { version = "0.13.0", features = ["alloc"] }
+embedded-hal-02 = { package = "embedded-hal", version = "0.2.7" }
+embassy-executor = { version = "0.10.0", features = [] }
+embassy-time = "0.5.0"
 embassy-futures = "0.1.2"
 embassy-sync = "0.8.0"
-mipidsi = "0.10.0"
-dummy-pin = "1.0.0"
 embedded-graphics = "0.8.2"
-embedded-hal = "1.0.0"
-embedded-hal-async = "1.0.0"
+embedded-graphics-core = "0.4.1"
+chrono = { version = "0.4.45", default-features = false }
+trouble-host = { version = "0.6.0", features = ["gatt", "scan"] }
+ieee80211 = "0.5.9"
 axp2101-dd = "0.2.3"
 display-driver = "0.1.0"
 display-driver-co5300 = "0.1.1"
-embedded-graphics-core = "0.4.1"
-port-expander = "0.6.5"
-embedded-hal-bus = "0.3.0"
-cst92xx = { path = "../cst92xx-touch-driver" }
-esp-nvs = { version = "0.5.0", features = ["esp32s3"] }
-esp-storage = { version = "0.9.0", features = ["esp32s3"] }
-embassy-net = { version = "0.9.1", features = ["proto-ipv4", "medium-ethernet", "tcp", "udp"] }
 drv2605 = "0.1.0"
-embedded-hal-compat = { version = "0.13.0", features = ["alloc"] }
-embedded-hal-02 = { package = "embedded-hal", version = "0.2.7" }
+cst92xx = { path = "../cst92xx-touch-driver" } #Fixme
+slint = { version = "1.17.1", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
 
 [build-dependencies]
 slint-build = { version = "1.7" }
