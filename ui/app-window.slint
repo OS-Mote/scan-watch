@@ -74,7 +74,7 @@ export component MainWindow inherits Window {
     pure callback get-screen-brightness() -> int;
     callback set-screen-timeout(timeout: int);
     pure callback get-screen-timeout() -> int;
-    callback set-display-dark-mode(dark-mode: bool);
+    callback set-screen-dark-mode(dark-mode: bool);
     callback set-smart-glasses-scan-duration(duration: int);
     pure callback get-smart-glasses-scan-duration() -> int;
     callback set-remote-id-scan-duration(duration: int);
@@ -683,7 +683,7 @@ export component MainWindow inherits Window {
                             clicked => {
                                 root.set-screen-brightness((brightness-slider.value / brightness-slider.maximum) * (255 - 16) + 16);
                                 root.set-screen-timeout(round(timeout-slider.value));
-                                root.set-display-dark-mode(dark-mode-checkbox.checked);
+                                root.set-screen-dark-mode(dark-mode-checkbox.checked);
                                 root.dark-mode = dark-mode-checkbox.checked;
 
                                 showing-settings-view = SettingsView.none;

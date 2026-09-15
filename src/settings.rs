@@ -118,7 +118,7 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             }
     }
 
-    pub fn get_display_dark_mode(&self) -> bool {
+    pub fn get_screen_dark_mode(&self) -> bool {
         self.display_dark_mode
     }
 

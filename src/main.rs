@@ -350,7 +350,7 @@ async fn main(spawner: Spawner) -> ! {
     display.set_brightness(settings.get_display_brightness());
 
     // Set visual preferences before showing the clock.
-    main_window.set_dark_mode(settings.get_display_dark_mode());
+    main_window.set_dark_mode(settings.get_screen_dark_mode());
     main_window.set_clock_twelve_hour(settings.get_clock_twelve_hour());
 
     let settings_static_cell = SETTINGS_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(settings)));
@@ -494,7 +494,7 @@ async fn main(spawner: Spawner) -> ! {
     });
 
     // Set the screen dark mode setting.
-    main_window.on_set_display_dark_mode(|dark_mode| {
+    main_window.on_set_screen_dark_mode(|dark_mode| {
         settings_static_cell.lock(|settings_mutex| {
             settings_mutex.borrow_mut().set_display_dark_mode(dark_mode);
         });
