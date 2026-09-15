@@ -705,7 +705,7 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
                         haptic_static_cell.lock(|haptic| {
                             let mut haptic = haptic.borrow_mut();
 
-                            let _ = haptic.set_single_effect(Effect::StrongClick30);
+                            let _ = haptic.set_single_effect(Effect::StrongClick100);
                             let _ = haptic.set_go(true);
                         });
 
