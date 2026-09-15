@@ -548,7 +548,7 @@ async fn main(spawner: Spawner) -> ! {
     main_window.on_set_flashlight_on(|on| {
         if let Ok(mut flashlight_mutex) = FLASHLIGHT_ON_MUTEX.try_lock() {
             // If the flashlight is on..
-            if *flashlight_mutex {
+            if on {
                 display_static_cell.lock(|display| {
                     // Set the display brightness to maximum.
                     display.borrow_mut().set_brightness(255);
