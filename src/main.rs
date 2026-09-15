@@ -962,6 +962,9 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
                 }
             )
         ).await;
+
+        // Signal the smart glasses alert as false.
+        SMART_GLASSES_ALERT_SIGNAL.signal(false);
     }
 }
 
