@@ -871,23 +871,10 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
             // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
 
-            // Generate a random MAC address from the RTC timestamp.
-            let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
-                rtc_mutex.borrow_mut().current_time_us()
-            });
-
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
-            let mut random_bytes = [0u8; 6];
-
-            random_bytes.copy_from_slice(&rng.next_u64().to_le_bytes()[0..6]);
-
-            random_bytes[0] &= 0xFE;
-            random_bytes[0] |= 0x02;
-
             // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-            let address = Address::random(random_bytes);
+            let address = Address::random(get_random_mac_address(rtc_static_cell));
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
@@ -1047,23 +1034,10 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
 
-            // Generate a random MAC address from the RTC timestamp.
-            let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
-                rtc_mutex.borrow_mut().current_time_us()
-            });
-
-            let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
-            let mut random_bytes = [0u8; 6];
-
-            random_bytes.copy_from_slice(&rng.next_u64().to_le_bytes()[0..6]);
-
-            random_bytes[0] &= 0xFE;
-            random_bytes[0] |= 0x02;
-
             // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-            let address = Address::random(random_bytes);
+            let address = Address::random(get_random_mac_address(rtc_static_cell));
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
@@ -1191,4 +1165,20 @@ fn get_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStora
     DateTime::from_timestamp_micros(timestamp + (elapsed_micros as i64))
         .unwrap()
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
+}
+
+fn get_random_mac_address(rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) -> [u8; 6] {
+    let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
+        rtc_mutex.borrow_mut().current_time_us()
+    });
+
+    let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
+    let mut random_bytes = [0u8; 6];
+
+    random_bytes.copy_from_slice(&rng.next_u64().to_le_bytes()[0..6]);
+
+    random_bytes[0] &= 0xFE;
+    random_bytes[0] |= 0x02;
+
+    random_bytes
 }
