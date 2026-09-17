@@ -139,6 +139,11 @@ use cst92xx::{
     BlockingCST92xx,
     Point as TouchPoint
 };
+use rand_core::{
+    SeedableRng,
+    Rng
+};
+use rand_xoshiro::Xoshiro256PlusPlus;
 
 mod qspi_bus;
 mod framebuffer;
@@ -582,9 +587,9 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(touch_event_task(touch_static_cell, haptic_static_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_static_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_static_cell, settings_static_cell).unwrap());
-    spawner.spawn(remote_id_sniffing_task(settings_static_cell).unwrap());
+    spawner.spawn(remote_id_sniffing_task(settings_static_cell, rtc_static_cell).unwrap());
     spawner.spawn(remote_id_alert_task(haptic_static_cell).unwrap());
-    spawner.spawn(smart_glasses_scan_task(settings_static_cell).unwrap());
+    spawner.spawn(smart_glasses_scan_task(settings_static_cell, rtc_static_cell).unwrap());
     spawner.spawn(smart_glasses_alert_task(haptic_static_cell).unwrap());
 
     main_window.show().unwrap();
@@ -832,9 +837,9 @@ const SMART_GLASSES_BLE_COMPANY_IDENTIFIERS: [u16; 3] = [
     0x0D53, // Luxottica
 ];
 
-struct SmartGlassesScanHandler {}
+struct SmartGlassesBluetoothScanHandler {}
 
-impl EventHandler for SmartGlassesScanHandler {
+impl EventHandler for SmartGlassesBluetoothScanHandler {
     // When a Bluetooth advertising reports have been detected..
     fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
         // Iterate through the reports.
@@ -859,17 +864,30 @@ const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 4;
 
 #[task]
-async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
     loop {
         if SmartGlassesScanTaskCommand::Start == SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Bluetooth peripheral.
             // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
 
+            // Generate a random MAC address from the RTC timestamp.
+            let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
+                rtc_mutex.borrow_mut().current_time_us()
+            });
+
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
+            let mut random_bytes = [0u8; 6];
+
+            random_bytes.copy_from_slice(&rng.next_u64().to_le_bytes()[0..6]);
+
+            random_bytes[0] &= 0xFE;
+            random_bytes[0] |= 0x02;
+
             // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-            let address = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
+            let address = Address::random(random_bytes);
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
@@ -883,7 +901,7 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
             // Set up the Bluetooth scanner with configuration and handler.
             let mut scanner = Scanner::new(central);
             let scan_config = ScanConfig::default();
-            let ble_scan_handler = SmartGlassesScanHandler{};
+            let ble_scan_handler = SmartGlassesBluetoothScanHandler{};
 
             // Set the smart glasses scan state as running.
             *SMART_GLASSES_SCAN_TASK_STATE_MUTEX.lock().await = SmartGlassesScanTaskState::Running;
@@ -971,8 +989,17 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
     }
 }
 
+struct RemoteIdBluetoothScanHandler {}
+
+impl EventHandler for RemoteIdBluetoothScanHandler {
+    // When a Bluetooth advertising reports have been detected..
+    fn on_adv_reports(&self, mut it: LeAdvReportsIter<'_>) {
+        println!("Recieved BLE advertisement");
+    }
+}
+
 #[task]
-async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
     loop {
         if RemoteIdScanTaskCommand::Start == REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Wifi peripheral.
@@ -1016,26 +1043,70 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             // Set promiscuous mode to recieve packets from unconnected access points.
             let _ = wifi_sniffer.set_promiscuous_mode(true);
 
+            // Steal the Bluetooth peripheral.
+            // It will be freed for re-use when it goes out of scope.
+            let bluetooth_peripheral = unsafe { BT::steal() };
+
+            // Generate a random MAC address from the RTC timestamp.
+            let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
+                rtc_mutex.borrow_mut().current_time_us()
+            });
+
+            let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
+            let mut random_bytes = [0u8; 6];
+
+            random_bytes.copy_from_slice(&rng.next_u64().to_le_bytes()[0..6]);
+
+            random_bytes[0] &= 0xFE;
+            random_bytes[0] |= 0x02;
+
+            // Compose the Bluetooth stack
+            let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
+            let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
+            let address = Address::random(random_bytes);
+            let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
+            let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
+
+            // Build the Bluetooth stack.
+            let Host {
+                central, 
+                mut runner,
+                ..
+            } = stack.build();
+
+            // Set up the Bluetooth scanner with configuration and handler.
+            let mut scanner = Scanner::new(central);
+            let scan_config = ScanConfig::default();
+            let ble_scan_handler = RemoteIdBluetoothScanHandler{};
+
             // Set the Remote Id scan state as running.
             *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Running;
 
             // Select between..
             select(
-                // Wifi channel-hopping future.
-                async {
-                    let mut wifi_channel: u8 = 1;
+                join(
+                    join(
+                        // The Bluetooth runner with handler future..
+                        runner.run_with_handler(&ble_scan_handler),
+                        // And the scanner future.
+                        scanner.scan(&scan_config)
+                    ),
+                    // Wifi channel-hopping future.
+                    async {
+                        let mut wifi_channel: u8 = 1;
 
-                    loop {
-                        // Set the Wifi channel.
-                        let _ = wifi_controller.set_channel(wifi_channel, SecondaryChannel::None);
+                        loop {
+                            // Set the Wifi channel.
+                            let _ = wifi_controller.set_channel(wifi_channel, SecondaryChannel::None);
 
-                        // Increment the channel between 1..14.
-                        if wifi_channel == 14 { wifi_channel = 1 } else { wifi_channel += 1 };
+                            // Increment the channel between 1..14.
+                            if wifi_channel == 14 { wifi_channel = 1 } else { wifi_channel += 1 };
 
-                        // Hop channels every 1 second.
-                        Timer::after_secs(1).await;
+                            // Hop channels every 1 second.
+                            Timer::after_secs(1).await;
+                        }
                     }
-                },
+                ),
                 // And a select between..
                 select(
                     // The scan duration future..

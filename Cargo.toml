@@ -47,6 +47,8 @@ display-driver-co5300 = "0.1.1"
 drv2605 = "0.1.0"
 cst92xx = { path = "../cst92xx-touch-driver" } #Fixme
 slint = { version = "1.17.1", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
+rand_xoshiro = "0.8.1"
+rand_core = "0.10.1"
 
 [build-dependencies]
 slint-build = { version = "1.7" }
