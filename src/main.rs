@@ -54,6 +54,7 @@ use esp_hal::{
         sleep::{
             TimerWakeupSource,
         },
+        SocResetReason
     },
     spi::{
         Mode as SpiMode,
@@ -64,7 +65,8 @@ use esp_hal::{
     },
     system::{
         SleepSource,
-        wakeup_cause
+        wakeup_cause,
+        reset_reason
     },
     time::Rate,
     timer::timg::TimerGroup
@@ -280,12 +282,13 @@ async fn main(spawner: Spawner) -> ! {
 
     let mut settings = Settings::new(flash_storage_static_cell).init();
 
-    // Use the RTC clock to set the local timestamp after boot.
-    if settings.get_timestamp_offset() == 0 {
+    // Use the RTC clock to set the local timestamp after warm boot or reset.
+    // This would fail after a full power-down which resets the RTC.
+    if let Some(reset_reason) = reset_reason() && reset_reason != SocResetReason::ChipPowerOn {
         settings.set_timestamp(rtc.current_time_us() as i64);
         settings.set_timestamp_offset(Instant::now().as_micros());
     }
-
+    
     let rtc_static_cell = RTC_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(rtc)));
     let power_static_cell = POWER_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(power)));
 
