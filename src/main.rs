@@ -144,10 +144,6 @@ use rand_core::{
     Rng
 };
 use rand_xoshiro::Xoshiro256PlusPlus;
-use opendroneid::{
-    Message,
-    UasData
-};
 
 mod qspi_bus;
 mod framebuffer;
@@ -849,15 +845,19 @@ struct SmartGlassesBluetoothScanHandler {}
 impl EventHandler for SmartGlassesBluetoothScanHandler {
     // When a Bluetooth advertising reports have been detected..
     fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
-        for ad_structure in report.data.structures() {
-            match ad_structure {
-                // Smart glasses ble advertisement found.
-                AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ }  => {
-                    if SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
-                        SMART_GLASSES_DETECTED_SIGNAL.signal(());
-                    }
+        // Iterate through the reports.
+        while let Some(Ok(report)) = reports_iterator.next() {
+            // Decode the report data.
+            let mut decoder = AdStructure::decode(report.data);
+
+            // Iterate through the decoded data.
+            while let Some(Ok(structure)) = decoder.next() {
+                // Match the Bluetooth device's company identifier to company identifiers of smart glasses manufacturers.
+                if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
+                SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
+                    // Signal that a smart glasses packet has been detected.
+                    SMART_GLASSES_DETECTED_SIGNAL.signal(());
                 }
-                _ => {}
             }
         }
     }
@@ -983,21 +983,26 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
     }
 }
 
-const OPENDRONEID_SERVICE_UUID: u16 = 0xFFF8; 
+const OPENDRONEID_SERVICE_UUID: u16 = 0xFFF8;
 
 struct RemoteIdBluetoothScanHandler {}
 
 impl EventHandler for RemoteIdBluetoothScanHandler {
+    // When a Bluetooth advertising reports have been detected..
     fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
-        for ad_structure in report.data.structures() {
-            match ad_structure {
-                // Open Drone ID payload found
-                AdStructure::ServiceData16 { uuid, data } => {
-                    if uuid.as_u16() == OPENDRONEID_SERVICE_UUID {
-                       REMOTE_ID_DETECTED_SIGNAL.signal(()); 
-                    }
+        // Iterate through the reports.
+        while let Some(Ok(report)) = reports_iterator.next() {
+            // Decode the report data.
+            let mut decoder = AdStructure::decode(report.data);
+
+            // Iterate through the decoded data.
+            while let Some(Ok(structure)) = decoder.next() {
+                // Match the service data bytes as one u16 to OPENDRONEID_SERVICE_UUID.
+                if let AdStructure::ServiceData16 { uuid, data: _ } = structure &&
+                ((uuid[0] as u16) << 8) | uuid[1] as u16 == OPENDRONEID_SERVICE_UUID {
+                    // Signal an Open Drone Id packet has been detected.
+                    REMOTE_ID_DETECTED_SIGNAL.signal(());
                 }
-                _ => {}
             }
         }
     }
