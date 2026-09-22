@@ -1008,7 +1008,7 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
 
             // Iterate through the decoded data..
             while let Some(Ok(structure)) = decoder.next() {
-                // Match the service data bytes as one u16 to OPENDRONEID_SERVICE_UUID.
+                // Match the service data bytes as one u16 to REMOTE_ID_SERVICE_UUID.
                 if let AdStructure::ServiceData16 { uuid, data: _ } = structure &&
                 ((uuid[0] as u16) << 8) | uuid[1] as u16 == REMOTE_ID_SERVICE_UUID {
                     // Signal an Remote Id packet has been detected.
