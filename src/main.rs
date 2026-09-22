@@ -1018,8 +1018,6 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
     }
 }
 
-use alloc::slice::Iter;
-
 const REMOTE_ID_WIFI_CHANNELS: [u8; 21] = [
     // 2.4 GHz
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
