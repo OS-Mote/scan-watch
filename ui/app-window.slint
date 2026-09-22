@@ -757,13 +757,13 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         Text {
-                            text: round(smart-glasses-scan-duration-slider.value) + " secs";
+                            text: round(smart-glasses-sniff-duration-slider.value) + " secs";
                             color: root.dark-mode ? red : white;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
                     }
-                    smart-glasses-scan-duration-slider := Slider{
+                    smart-glasses-sniff-duration-slider := Slider{
                         value: root.get-smart-glasses-sniffing-duration();
                         minimum: 30;
                         maximum: 300;
@@ -778,13 +778,13 @@ export component MainWindow inherits Window {
                             color: root.dark-mode ? red : white;
                         }
                         Text {
-                            text: round(remote-id-scan-duration-slider.value) + " secs";
+                            text: round(remote-id-sniff-duration-slider.value) + " secs";
                             color: root.dark-mode ? red : white;
                             vertical-alignment: top;
                             horizontal-alignment: right;
                         }
                     }
-                    remote-id-scan-duration-slider := Slider{
+                    remote-id-sniff-duration-slider := Slider{
                         value: root.get-remote-id-sniffing-duration();
                         minimum:30;
                         maximum: 300;
@@ -807,8 +807,8 @@ export component MainWindow inherits Window {
                             text: "Done";
                             color: root.dark-mode ? red : white;
                             clicked => {
-                                root.set-smart-glasses-sniffing-duration(round(smart-glasses-scan-duration-slider.value));
-                                root.set-remote-id-sniffing-duration(round(remote-id-scan-duration-slider.value));
+                                root.set-smart-glasses-sniffing-duration(round(smart-glasses-sniff-duration-slider.value));
+                                root.set-remote-id-sniffing-duration(round(remote-id-sniff-duration-slider.value));
                                 root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
