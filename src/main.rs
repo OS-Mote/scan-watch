@@ -805,8 +805,8 @@ async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSe
                        update_date_time(&settings_mutex.borrow()); 
                     });
 
+                    // Turn on the display..
                     display_static_cell.lock(|display_mutex| {
-                        // Turn on the display..
                         display_mutex.borrow_mut().display_on();
                     });
 
