@@ -213,14 +213,14 @@ static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<Cr
 static BATTERY_STATUS_MUTEX: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
 static REMOTE_ID_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdSnifferTaskState> = Mutex::new(RemoteIdSnifferTaskState::Stopped);
 static REMOTE_ID_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
-static SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesSnifferTaskState> = Mutex::new(SmartGlassesSnifferTaskState::Stopped);
+static SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesSnifferTaskState> = Mutex::new(SmartGlassesSnifferTaskState::Stopped);
 static SMART_GLASSES_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
 
-static REMOTE_ID_SNIFFER_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdSnifferTaskCommand> = Signal::new();
+static REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdSnifferTaskCommand> = Signal::new();
 static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-static SMART_GLASSES_SNIFFER_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesSnifferTaskCommand> = Signal::new();
+static SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, SmartGlassesSnifferTaskCommand> = Signal::new();
 static SMART_GLASSES_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 static DISPLAY_TOUCHED_SIGNAL: Signal<CriticalSectionRawMutex, Instant> = Signal::new();
 static DISPLAY_TOUCH_EVENT_SIGNAL: Signal<CriticalSectionRawMutex, WindowEvent> = Signal::new();
@@ -550,12 +550,12 @@ async fn main(spawner: Spawner) -> ! {
 
     // Issue a Remote Id scan task command.
     main_window.on_set_remote_id_scan_task_command(|command| {
-        REMOTE_ID_SNIFFER_TASK_COMMAND_SIGNAL.signal(command);
+        REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.signal(command);
     });
 
     // Issue a smart glasses scan task command.
     main_window.on_set_smart_glasses_scan_task_command(|command| {
-        SMART_GLASSES_SNIFFER_TASK_COMMAND_SIGNAL.signal(command);
+        SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(command);
     });
 
     main_window.on_send_haptic_strong_click(|| {
@@ -599,7 +599,7 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(display_timeout_countdown_task(display_static_cell, settings_static_cell).unwrap());
     spawner.spawn(remote_id_sniffing_task(settings_static_cell, rtc_static_cell).unwrap());
     spawner.spawn(remote_id_alert_task(haptic_static_cell).unwrap());
-    spawner.spawn(smart_glasses_sniffer_task(settings_static_cell, rtc_static_cell).unwrap());
+    spawner.spawn(smart_glasses_sniffing_task(settings_static_cell, rtc_static_cell).unwrap());
     spawner.spawn(smart_glasses_alert_task(haptic_static_cell).unwrap());
 
     main_window.show().unwrap();
@@ -623,7 +623,7 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the smart glasses scan task state on the main window.
-        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX.try_lock() {
+        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.try_lock() {
             main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
         }
 
@@ -745,17 +745,17 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
             join(
                 // Wait for the smart glasses scan to stop..
                 async {
-                    SMART_GLASSES_SNIFFER_TASK_COMMAND_SIGNAL.signal(SmartGlassesSnifferTaskCommand::Stop);
+                    SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(SmartGlassesSnifferTaskCommand::Stop);
 
                     loop {
-                        if *SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
+                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
                             return;
                         }
                     }
                 },
                 // And wait for the remote id scan to stop.
                 async {
-                    REMOTE_ID_SNIFFER_TASK_COMMAND_SIGNAL.signal(RemoteIdSnifferTaskCommand::Stop);
+                    REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.signal(RemoteIdSnifferTaskCommand::Stop);
 
                     loop {
                         if *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await == RemoteIdSnifferTaskState::Stopped {
@@ -869,9 +869,9 @@ const CONNECTIONS_MAX: usize = 1;
 const L2CAP_CHANNELS_MAX: usize = 4;
 
 #[task]
-async fn smart_glasses_sniffer_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
+async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
     loop {
-        if SmartGlassesSnifferTaskCommand::Start == SMART_GLASSES_SNIFFER_TASK_COMMAND_SIGNAL.wait().await {
+        if SmartGlassesSnifferTaskCommand::Start == SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Bluetooth peripheral.
             // It will be freed for re-use when it goes out of scope.
             let bluetooth_peripheral = unsafe { BT::steal() };
@@ -900,7 +900,7 @@ async fn smart_glasses_sniffer_task(settings_static_cell: &'static CriticalSecti
             let ble_scan_handler = SmartGlassesBluetoothScanHandler{};
 
             // Set the smart glasses scan state as running.
-            *SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Running;
+            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Running;
 
             // Select between..
             let _ = select(
@@ -932,7 +932,7 @@ async fn smart_glasses_sniffer_task(settings_static_cell: &'static CriticalSecti
                     // And the stop command signal future.
                     async {
                         loop {
-                            if SmartGlassesSnifferTaskCommand::Stop == SMART_GLASSES_SNIFFER_TASK_COMMAND_SIGNAL.wait().await {
+                            if SmartGlassesSnifferTaskCommand::Stop == SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.wait().await {
                                 return;
                             }
                         }
@@ -942,7 +942,7 @@ async fn smart_glasses_sniffer_task(settings_static_cell: &'static CriticalSecti
                 .await;
 
             // Set the smart glasses scan state as stopped.
-            *SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Stopped;
+            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Stopped;
         }
     }
 }
@@ -980,7 +980,7 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
                 async {
                     // Waiting for the smart glasses scan task state to be Stopped.
                     loop {
-                        if *SMART_GLASSES_SNIFFER_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
+                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
                             return;
                         }
                     }
@@ -1028,7 +1028,7 @@ const REMOTE_ID_WIFI_CHANNELS: [u8; 21] = [
 #[task]
 async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
     loop {
-        if RemoteIdSnifferTaskCommand::Start == REMOTE_ID_SNIFFER_TASK_COMMAND_SIGNAL.wait().await {
+        if RemoteIdSnifferTaskCommand::Start == REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.wait().await {
             // Steal the Wifi peripheral.
             // It will be freed for re-use when it goes out of scope.
             let wifi_peripheral = unsafe { esp_hal::peripherals::WIFI::steal() };
@@ -1146,7 +1146,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                     // And the stop command signal future.
                     async {
                         loop {
-                            if RemoteIdSnifferTaskCommand::Stop == REMOTE_ID_SNIFFER_TASK_COMMAND_SIGNAL.wait().await {
+                            if RemoteIdSnifferTaskCommand::Stop == REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.wait().await {
                                 return;
                             }
                         }
