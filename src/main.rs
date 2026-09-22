@@ -557,6 +557,15 @@ async fn main(spawner: Spawner) -> ! {
         SMART_GLASSES_SCAN_TASK_COMMAND_SIGNAL.signal(command);
     });
 
+    main_window.on_send_haptic_strong_click(|| {
+        haptic_static_cell.lock(|haptic_mutex| {
+            let mut haptic = haptic_mutex.borrow_mut();
+
+            let _ = haptic.set_single_effect(Effect::StrongClick100);
+            let _ = haptic.set_go(true);
+        });
+    });
+
     // Set the flashlight status.
     main_window.on_set_flashlight_on(|on| {
         if let Ok(mut flashlight_mutex) = FLASHLIGHT_ON_MUTEX.try_lock() {
@@ -677,12 +686,12 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
                     // Else this is a new touch.
                     } else {
                         // Use the haptic motor to send a "click" vibration to the user.
-                        haptic_static_cell.lock(|haptic_mutex| {
-                            let mut haptic = haptic_mutex.borrow_mut();
+                        // haptic_static_cell.lock(|haptic_mutex| {
+                        //     let mut haptic = haptic_mutex.borrow_mut();
 
-                            let _ = haptic.set_single_effect(Effect::StrongClick100);
-                            let _ = haptic.set_go(true);
-                        });
+                        //     let _ = haptic.set_single_effect(Effect::StrongClick100);
+                        //     let _ = haptic.set_go(true);
+                        // });
 
                         WindowEvent::PointerPressed {
                             position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32),
@@ -1003,7 +1012,7 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
                     // Signal an Open Drone Id packet has been detected.
                     REMOTE_ID_DETECTED_SIGNAL.signal(());
                 }
-            }
+            } 
         }
     }
 }

@@ -81,6 +81,7 @@ export component MainWindow inherits Window {
     pure callback get-remote-id-scan-duration() -> int;
     callback set-remote-id-scan-task-command(command: RemoteIdScanTaskCommand);
     callback set-smart-glasses-scan-task-command(command: SmartGlassesScanTaskCommand);
+    callback send-haptic-strong-click();
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
     callback update-battery-status(percent-charged: int, is-charging: bool);
     callback set-flashlight-on(bool);
@@ -131,6 +132,7 @@ export component MainWindow inherits Window {
                             
                             clicked => {
                                 root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesScanTaskState.stopped ? SmartGlassesScanTaskCommand.start : SmartGlassesScanTaskCommand.stop);
+                                root.send-haptic-strong-click();
                             }
 
                             states [
@@ -149,6 +151,7 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdScanTaskState.stopped ? RemoteIdScanTaskCommand.start : RemoteIdScanTaskCommand.stop);
+                                root.send-haptic-strong-click();
                             }
 
                             states [
@@ -276,37 +279,55 @@ export component MainWindow inherits Window {
                         text: "Date";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.date; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.date;
+                        }
                     }
                     TextButton {
                         text: "Timezone";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.timezone; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.timezone;
+                        }
                     }
                     TextButton {
                         text: "Time";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.time; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.time;
+                        }
                     }
                     TextButton {
                         text: "Clock";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.clock; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.clock;
+                        }
                     }
                     TextButton {
                         text: "Screen";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.screen; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.screen;
+                        }
                     }
                     TextButton {
                         text: "Scan Duration";
                         color: root.dark-mode ? red : white;
 
-                        clicked => { showing-settings-view = SettingsView.scan-duration; }
+                        clicked => {
+                            root.send-haptic-strong-click();
+                            showing-settings-view = SettingsView.scan-duration;
+                        }
                     }
                 }
             }
@@ -397,7 +418,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -405,6 +429,7 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-date(round(month-slider.value), round(day-slider.value), round(year-slider.value));
+                                root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -451,7 +476,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -459,6 +487,7 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-timezone-offset(round(timezone-slider.value));
+                                root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -539,7 +568,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -547,6 +579,7 @@ export component MainWindow inherits Window {
 
                             clicked => {
                                 root.set-time(round(hour-slider.value), round(minute-slider.value), round(second-slider.value));
+                                root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -586,7 +619,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -595,6 +631,8 @@ export component MainWindow inherits Window {
                             clicked => {
                                 root.set-clock-twelve-hour(clock-twelve-hour-checkbox.checked);
                                 root.clock-twelve-hour = clock-twelve-hour-checkbox.checked;
+                                root.send-haptic-strong-click();
+
                                 showing-settings-view = SettingsView.none;
                             }
                         }
@@ -675,7 +713,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -685,6 +726,7 @@ export component MainWindow inherits Window {
                                 root.set-screen-timeout(round(timeout-slider.value));
                                 root.set-screen-dark-mode(dark-mode-checkbox.checked);
                                 root.dark-mode = dark-mode-checkbox.checked;
+                                root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
                             }
@@ -756,7 +798,10 @@ export component MainWindow inherits Window {
                         TextButton {
                             text: "Cancel";
                             color: root.dark-mode ? yellow : red;
-                            clicked => { showing-settings-view = SettingsView.none; }
+                            clicked => {
+                                root.send-haptic-strong-click();
+                                showing-settings-view = SettingsView.none;
+                            }
                         }
                         TextButton {
                             text: "Done";
@@ -764,6 +809,7 @@ export component MainWindow inherits Window {
                             clicked => {
                                 root.set-smart-glasses-scan-duration(round(smart-glasses-scan-duration-slider.value));
                                 root.set-remote-id-scan-duration(round(remote-id-scan-duration-slider.value));
+                                root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;
                             }
