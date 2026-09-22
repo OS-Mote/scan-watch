@@ -1184,7 +1184,7 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
             },
             // And a select between..
             select(
-                // Waiting for SCAN_ALERT_DURATION since the Remote Id detection
+                // Waiting for SNIFFING_ALERT_DURATION since the Remote Id detection
                 async {
                     loop {
                         Timer::after_secs(SNIFFING_ALERT_DURATION).await;
