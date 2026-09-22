@@ -213,7 +213,7 @@ static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<Cr
 static BATTERY_STATUS_MUTEX: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
 static REMOTE_ID_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdSnifferTaskState> = Mutex::new(RemoteIdSnifferTaskState::Stopped);
 static REMOTE_ID_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
-static SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesSnifferTaskState> = Mutex::new(SmartGlassesSnifferTaskState::Stopped);
+static SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesSniffingTaskState> = Mutex::new(SmartGlassesSniffingTaskState::Stopped);
 static SMART_GLASSES_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
@@ -748,7 +748,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
                     SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(SmartGlassesSnifferTaskCommand::Stop);
 
                     loop {
-                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
+                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSniffingTaskState::Stopped {
                             return;
                         }
                     }
@@ -900,7 +900,7 @@ async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSect
             let ble_scan_handler = SmartGlassesBluetoothScanHandler{};
 
             // Set the smart glasses scan state as running.
-            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Running;
+            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSniffingTaskState::Running;
 
             // Select between..
             let _ = select(
@@ -942,7 +942,7 @@ async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSect
                 .await;
 
             // Set the smart glasses scan state as stopped.
-            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSnifferTaskState::Stopped;
+            *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSniffingTaskState::Stopped;
         }
     }
 }
@@ -980,7 +980,7 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
                 async {
                     // Waiting for the smart glasses scan task state to be Stopped.
                     loop {
-                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSnifferTaskState::Stopped {
+                        if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSniffingTaskState::Stopped {
                             return;
                         }
                     }
