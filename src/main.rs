@@ -558,6 +558,7 @@ async fn main(spawner: Spawner) -> ! {
         SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(command);
     });
 
+    // Send a haptic strong click.
     main_window.on_send_haptic_strong_click(|| {
         haptic_static_cell.lock(|haptic_mutex| {
             let mut haptic = haptic_mutex.borrow_mut();
