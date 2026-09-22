@@ -594,7 +594,7 @@ async fn main(spawner: Spawner) -> ! {
 
     // Spawn tasks.
     spawner.spawn(battery_status_update_task(power_static_cell, rtc_static_cell, settings_static_cell).unwrap());
-    spawner.spawn(touch_event_task(touch_static_cell, haptic_static_cell).unwrap());
+    spawner.spawn(touch_event_task(touch_static_cell).unwrap());
     spawner.spawn(date_time_update_task(settings_static_cell).unwrap());
     spawner.spawn(display_timeout_countdown_task(display_static_cell, settings_static_cell).unwrap());
     spawner.spawn(remote_id_sniffing_task(settings_static_cell, rtc_static_cell).unwrap());
@@ -667,7 +667,7 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 #[task]
-async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>, haptic_static_cell: &'static CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>) {
+async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>) {
     let mut last_touch_point: Option<TouchPoint> = None;
 
     loop {
