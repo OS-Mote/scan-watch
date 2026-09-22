@@ -845,14 +845,14 @@ const SMART_GLASSES_BLE_COMPANY_IDENTIFIERS: [u16; 3] = [
 struct SmartGlassesBluetoothScanHandler {}
 
 impl EventHandler for SmartGlassesBluetoothScanHandler {
-    // When a Bluetooth advertising reports have been detected..
+    // When we recieve Bluetooth advertising reports..
     fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
-        // Iterate through the reports.
+        // Iterate through the reports..
         while let Some(Ok(report)) = reports_iterator.next() {
             // Decode the report data.
             let mut decoder = AdStructure::decode(report.data);
 
-            // Iterate through the decoded data.
+            // Iterate through the decoded data..
             while let Some(Ok(structure)) = decoder.next() {
                 // Match the Bluetooth device's company identifier to company identifiers of smart glasses manufacturers.
                 if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
@@ -998,14 +998,14 @@ const OPENDRONEID_SERVICE_UUID: u16 = 0xFFF8;
 struct RemoteIdBluetoothScanHandler {}
 
 impl EventHandler for RemoteIdBluetoothScanHandler {
-    // When a Bluetooth advertising reports have been detected..
+    // When we recieve Bluetooth advertising reports..
     fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
-        // Iterate through the reports.
+        // Iterate through the reports..
         while let Some(Ok(report)) = reports_iterator.next() {
             // Decode the report data.
             let mut decoder = AdStructure::decode(report.data);
 
-            // Iterate through the decoded data.
+            // Iterate through the decoded data..
             while let Some(Ok(structure)) = decoder.next() {
                 // Match the service data bytes as one u16 to OPENDRONEID_SERVICE_UUID.
                 if let AdStructure::ServiceData16 { uuid, data: _ } = structure &&
