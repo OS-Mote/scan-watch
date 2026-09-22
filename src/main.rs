@@ -17,7 +17,8 @@ use esp_println::println;
 use alloc::{
     boxed::Box,
     rc::Rc,
-    vec
+    vec,
+    vec::Vec
 };
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
@@ -1017,6 +1018,8 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
     }
 }
 
+use alloc::slice::Iter;
+
 #[task]
 async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>, rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) {
     loop {
@@ -1103,16 +1106,23 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                     ),
                     // Wifi channel-hopping future.
                     async {
-                        let mut wifi_channel: u8 = 1;
+                        let wifi_channels: Vec<u8> = vec![
+                            // 2.4 GHz
+                            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                            // 5.8 GHz
+                            36, 40, 44, 48, 149, 153, 157, 161
+                        ];
+
+                        let mut wifi_channel_iterator = wifi_channels.iter();
 
                         loop {
-                            // Set the Wifi channel.
-                            let _ = wifi_controller.set_channel(wifi_channel, SecondaryChannel::None);
+                            if let Some(wifi_channel) = wifi_channel_iterator.next() {
+                                let _ = wifi_controller.set_channel(*wifi_channel, SecondaryChannel::None);
+                            } else {
+                                wifi_channel_iterator = wifi_channels.iter();
+                            }
 
-                            // Increment the channel between 1..14.
-                            if wifi_channel == 14 { wifi_channel = 1 } else { wifi_channel += 1 };
-
-                            // Hop channels every 1 second.
+                            // Hop channels every 1.1 seconds.
                             Timer::after_millis(1100).await;
                         }
                     }

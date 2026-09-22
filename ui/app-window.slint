@@ -765,7 +765,7 @@ export component MainWindow inherits Window {
                     }
                     smart-glasses-scan-duration-slider := Slider{
                         value: root.get-smart-glasses-scan-duration();
-                        minimum: 15;
+                        minimum: 30;
                         maximum: 300;
 
                         changed(value) => {
@@ -786,7 +786,7 @@ export component MainWindow inherits Window {
                     }
                     remote-id-scan-duration-slider := Slider{
                         value: root.get-remote-id-scan-duration();
-                        minimum:15;
+                        minimum:30;
                         maximum: 300;
 
                         changed(value) => {
