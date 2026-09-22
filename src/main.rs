@@ -144,6 +144,10 @@ use rand_core::{
     Rng
 };
 use rand_xoshiro::Xoshiro256PlusPlus;
+use opendroneid::{
+    Message,
+    UasData
+};
 
 mod qspi_bus;
 mod framebuffer;
@@ -712,11 +716,9 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
 #[task]
 async fn date_time_update_task(settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     loop {
-        let date_time = settings_static_cell.lock(|settings_mutex| {
-            get_date_time(&settings_mutex.borrow())
+        settings_static_cell.lock(|settings_mutex| {
+            update_date_time(&settings_mutex.borrow()); 
         });
-
-        DATE_TIME_UPDATED_SIGNAL.signal(date_time);
 
         Timer::after_millis(250).await;
     }
@@ -800,6 +802,11 @@ async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSe
 
                 // And the display is not on..
                 if !*display_on {
+                    // Make sure we have a fresh date_time to display.
+                    settings_static_cell.lock(|settings_mutex| {
+                       update_date_time(&settings_mutex.borrow()); 
+                    });
+
                     display_static_cell.lock(|display_mutex| {
                         // Turn on the display..
                         display_mutex.borrow_mut().display_on();
@@ -842,19 +849,15 @@ struct SmartGlassesBluetoothScanHandler {}
 impl EventHandler for SmartGlassesBluetoothScanHandler {
     // When a Bluetooth advertising reports have been detected..
     fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
-        // Iterate through the reports.
-        while let Some(Ok(report)) = reports_iterator.next() {
-            // Decode the report data.
-            let mut decoder = AdStructure::decode(report.data);
-
-            // Iterate through the decoded data.
-            while let Some(Ok(structure)) = decoder.next() {
-                // Match the Bluetooth device's company identifier to company identifiers of smart glasses manufacturers.
-                if let AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ } = structure &&
-                SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
-                    // Signal the instant smart glasses have been detected.
-                    SMART_GLASSES_DETECTED_SIGNAL.signal(());
+        for ad_structure in report.data.structures() {
+            match ad_structure {
+                // Smart glasses ble advertisement found.
+                AdStructure::ManufacturerSpecificData{ company_identifier, payload: _ }  => {
+                    if SMART_GLASSES_BLE_COMPANY_IDENTIFIERS.contains(&company_identifier) {
+                        SMART_GLASSES_DETECTED_SIGNAL.signal(());
+                    }
                 }
+                _ => {}
             }
         }
     }
@@ -874,7 +877,11 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
             // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-            let address = Address::random(get_random_mac_seed(rtc_static_cell));
+
+            let address = rtc_static_cell.lock(|rtc_mutex| {
+                Address::random(get_random_mac_seed(&rtc_mutex.borrow()))
+            });
+
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
@@ -976,11 +983,24 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
     }
 }
 
+const OPENDRONEID_SERVICE_UUID: u16 = 0xFFF8; 
+
 struct RemoteIdBluetoothScanHandler {}
 
 impl EventHandler for RemoteIdBluetoothScanHandler {
-    // When a Bluetooth advertising reports have been detected..
-    fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {}
+    fn on_adv_reports(&self, mut reports_iterator: LeAdvReportsIter<'_>) {
+        for ad_structure in report.data.structures() {
+            match ad_structure {
+                // Open Drone ID payload found
+                AdStructure::ServiceData16 { uuid, data } => {
+                    if uuid.as_u16() == OPENDRONEID_SERVICE_UUID {
+                       REMOTE_ID_DETECTED_SIGNAL.signal(()); 
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 #[task]
@@ -1035,7 +1055,11 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             // Compose the Bluetooth stack
             let ble_connector = BleConnector::new(bluetooth_peripheral, Default::default()).unwrap();
             let external_controller: ExternalController<_, 1> = ExternalController::new(ble_connector);
-            let address = Address::random(get_random_mac_seed(rtc_static_cell));
+
+            let address = rtc_static_cell.lock(|rtc_mutex| {
+                Address::random(get_random_mac_seed(&rtc_mutex.borrow()))
+            });
+            
             let mut host_resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> = HostResources::new();
             let stack = trouble_host::new(external_controller, &mut host_resources).set_random_address(address);
 
@@ -1165,12 +1189,16 @@ fn get_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStora
         .with_timezone(&FixedOffset::east_opt(3600 * timezone_offset).unwrap())
 }
 
-// Generate a random 6-byte seed from the RTC timestamp for Bluetooth MAC addresses.
-fn get_random_mac_seed(rtc_static_cell: &'static CriticalSectionMutex<RefCell<Rtc<'static>>>) -> [u8; 6] {
-    let rtc_timestamp = rtc_static_cell.lock(|rtc_mutex| {
-        rtc_mutex.borrow_mut().current_time_us()
-    });
+// Update the DATE_TIME_UPDATED_SIGNAL with the current date_time.
+fn update_date_time(settings: &Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>) {
+    let date_time = get_date_time(settings);
 
+    DATE_TIME_UPDATED_SIGNAL.signal(date_time);
+}
+
+// Generate a random 6-byte seed from the RTC timestamp for Bluetooth MAC addresses.
+fn get_random_mac_seed(rtc: &Rtc<'static>) -> [u8; 6] {
+    let rtc_timestamp = rtc.current_time_us();
     let mut rng = Xoshiro256PlusPlus::seed_from_u64(rtc_timestamp);
     let mut random_bytes = [0u8; 6];
 
