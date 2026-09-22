@@ -1052,7 +1052,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                         for element in beacon.body.elements.get_matching_elements::<VendorSpecificElement>() {
                             // And the payload prefix matches Remote Id..
                             if element.get_payload_if_prefix_matches(&[0xFA, 0x0B, 0xBC]).is_some() {
-                                // Signal the instant a Remote Id packet has been detected.
+                                // Signal that a Remote Id packet has been detected.
                                 REMOTE_ID_DETECTED_SIGNAL.signal(());
                             }
                         }
@@ -1060,7 +1060,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                     action = RawActionFrame => {
                         // If the frame has a vendor payload that mathes Remote Id..
                         if action.body.is_vendor_and_matches([0xFA, 0x0B, 0xBC]) {
-                            // Signal the instant a Remote Id packet has been detected.
+                            // Signal that a Remote Id packet has been detected.
                             REMOTE_ID_DETECTED_SIGNAL.signal(());
                         }
                     }
