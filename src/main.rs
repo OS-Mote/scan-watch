@@ -685,14 +685,6 @@ async fn touch_event_task(touch_static_cell: &'static CriticalSectionMutex<RefCe
                         }
                     // Else this is a new touch.
                     } else {
-                        // Use the haptic motor to send a "click" vibration to the user.
-                        // haptic_static_cell.lock(|haptic_mutex| {
-                        //     let mut haptic = haptic_mutex.borrow_mut();
-
-                        //     let _ = haptic.set_single_effect(Effect::StrongClick100);
-                        //     let _ = haptic.set_go(true);
-                        // });
-
                         WindowEvent::PointerPressed {
                             position: LogicalPosition::new(touch_point.x as f32, touch_point.y as f32),
                             button: PointerEventButton::Left
