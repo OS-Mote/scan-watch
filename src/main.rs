@@ -210,7 +210,7 @@ static HAPTIC_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Drv2605<I2cPr
 static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
 
 static BATTERY_STATUS_MUTEX: Mutex<CriticalSectionRawMutex, (u8, bool)> = Mutex::new((0, false));
-static REMOTE_ID_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
+static REMOTE_ID_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, RemoteIdScanTaskState> = Mutex::new(RemoteIdScanTaskState::Stopped);
 static REMOTE_ID_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static SMART_GLASSES_SCAN_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, SmartGlassesScanTaskState> = Mutex::new(SmartGlassesScanTaskState::Stopped);
 static SMART_GLASSES_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
@@ -518,7 +518,7 @@ async fn main(spawner: Spawner) -> ! {
     // Get the smart glasses scan duration.
     main_window.on_get_smart_glasses_scan_duration(|| {
         settings_static_cell.lock(|settings_mutex| {
-            settings_mutex.borrow().get_smart_glasses_scan_duration() as i32
+            settings_mutex.borrow().get_smart_glasses_sniffing_duration() as i32
         })
     });
 
@@ -532,7 +532,7 @@ async fn main(spawner: Spawner) -> ! {
     // Get the Remote Id scan duration.
     main_window.on_get_remote_id_scan_duration(|| {
         settings_static_cell.lock(|settings_mutex| {
-            settings_mutex.borrow().get_remote_id_scan_duration() as i32
+            settings_mutex.borrow().get_remote_id_sniffing_duration() as i32
         })
     });
 
@@ -612,7 +612,7 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         // Set the Remote Id scan task state on the main window.
-        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SCAN_TASK_STATE_MUTEX.try_lock() {
+        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.try_lock() {
             main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
         }
 
@@ -757,7 +757,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
                     REMOTE_ID_SCAN_TASK_COMMAND_SIGNAL.signal(RemoteIdScanTaskCommand::Stop);
 
                     loop {
-                        if *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
+                        if *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
                             return;
                         }
                     }
@@ -914,11 +914,19 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
                 select(
                     // The scan duration future..
                     async {
+                        let sniffing_started_instant = Instant::now();
+
                         let scan_duration = settings_static_cell.lock(|settings_mutex| {
-                            settings_mutex.borrow().get_smart_glasses_scan_duration()
+                            settings_mutex.borrow().get_smart_glasses_sniffing_duration()
                         }) as u64;
 
-                        Timer::after_secs(scan_duration).await;
+                        loop {
+                            if Instant::now().duration_since(sniffing_started_instant).as_secs() >= scan_duration {
+                                return;
+                            }
+
+                            Timer::after_millis(250).await;
+                        }
                     },
                     // And the stop command signal future.
                     async {
@@ -1082,7 +1090,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             let ble_scan_handler = RemoteIdBluetoothScanHandler{};
 
             // Set the Remote Id scan state as running.
-            *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Running;
+            *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Running;
 
             // Select between..
             select(
@@ -1113,11 +1121,19 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                 select(
                     // The scan duration future..
                     async {
+                        let sniffing_started_instant = Instant::now();
+
                         let scan_duration = settings_static_cell.lock(|settings_mutex| {
-                            settings_mutex.borrow().get_remote_id_scan_duration()
+                            settings_mutex.borrow().get_remote_id_sniffing_duration()
                         }) as u64;
 
-                        Timer::after_secs(scan_duration).await;
+                        loop {
+                            if Instant::now().duration_since(sniffing_started_instant).as_secs() >= scan_duration {
+                                return;
+                            }
+
+                            Timer::after_millis(250).await;
+                        }
                     },
                     // And the stop command signal future.
                     async {
@@ -1131,7 +1147,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             ).await;
 
             // Set the Remote Id scan state as stopped.
-            *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Stopped;
+            *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await = RemoteIdScanTaskState::Stopped;
         }
     }
 }
@@ -1169,7 +1185,7 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
                 async {
                     // Waiting for the Remote Id scan task state to be Stopped.
                     loop {
-                        if *REMOTE_ID_SCAN_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
+                        if *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await == RemoteIdScanTaskState::Stopped {
                             return;
                         }
                     }

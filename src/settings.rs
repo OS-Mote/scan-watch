@@ -192,7 +192,7 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             }
     }
 
-    pub fn get_smart_glasses_scan_duration(&self) -> u8 {
+    pub fn get_smart_glasses_sniffing_duration(&self) -> u8 {
         self.smart_glasses_scan_duration
     }
 
@@ -205,7 +205,7 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             }
     }
 
-    pub fn get_remote_id_scan_duration(&self) -> u8 {
+    pub fn get_remote_id_sniffing_duration(&self) -> u8 {
         self.remote_id_scan_duration
     }
 }
