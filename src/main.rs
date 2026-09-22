@@ -916,11 +916,11 @@ async fn smart_glasses_scan_task(settings_static_cell: &'static CriticalSectionM
                     async {
                         let sniffing_started_instant = Instant::now();
 
-                        let scan_duration = settings_static_cell.lock(|settings_mutex| {
-                            settings_mutex.borrow().get_smart_glasses_sniffing_duration()
-                        }) as u64;
-
                         loop {
+                            let scan_duration = settings_static_cell.lock(|settings_mutex| {
+                                settings_mutex.borrow().get_smart_glasses_sniffing_duration()
+                            }) as u64;
+
                             if Instant::now().duration_since(sniffing_started_instant).as_secs() >= scan_duration {
                                 return;
                             }
@@ -1123,11 +1123,11 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                     async {
                         let sniffing_started_instant = Instant::now();
 
-                        let scan_duration = settings_static_cell.lock(|settings_mutex| {
-                            settings_mutex.borrow().get_remote_id_sniffing_duration()
-                        }) as u64;
-
                         loop {
+                            let scan_duration = settings_static_cell.lock(|settings_mutex| {
+                                settings_mutex.borrow().get_remote_id_sniffing_duration()
+                            }) as u64;
+
                             if Instant::now().duration_since(sniffing_started_instant).as_secs() >= scan_duration {
                                 return;
                             }
