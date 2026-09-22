@@ -1113,7 +1113,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                             if wifi_channel == 14 { wifi_channel = 1 } else { wifi_channel += 1 };
 
                             // Hop channels every 1 second.
-                            Timer::after_secs(1).await;
+                            Timer::after_millis(1100).await;
                         }
                     }
                 ),
