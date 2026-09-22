@@ -28,12 +28,12 @@ const TIMESTAMP_OFFSET_SETTINGS_KEY: &str = "timest-off";
 const TIMESTAMP_OFFSET_DEFAULT: u64 = 0;
 const CLOCK_TWELVE_HOUR_SETTINGS_KEY: &str = "clk-12";
 const CLOCK_TWELVE_HOUR_DEFAULT: bool = false;
-const SMART_GLASSES_SCAN_DURATION_SETTINGS_KEY: &str = "smrt-dur";
-const SMART_GLASSES_SCAN_DURATION_DEFAULT: u8 = 30;
-const REMOTE_ID_SCAN_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
-const REMOTE_ID_SCAN_DURATION_DEFAULT: u8 = 30;
+const SMART_GLASSES_SNIFFING_DURATION_SETTINGS_KEY: &str = "smrt-dur";
+const SMART_GLASSES_SNIFFING_DURATION_DEFAULT: u8 = 30;
+const REMOTE_ID_SNIFFING_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
+const REMOTE_ID_SNIFFING_DURATION_DEFAULT: u8 = 30;
 
-pub const SCAN_ALERT_DURATION: u64 = 15;
+pub const SNIFFING_ALERT_DURATION: u64 = 15;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,
@@ -44,8 +44,8 @@ pub struct Settings<S: 'static> {
     timestamp: i64,
     timestamp_offset: u64,
     clock_twelve_hour: bool,
-    smart_glasses_scan_duration: u8,
-    remote_id_scan_duration: u8,
+    smart_glasses_sniffing_duration: u8,
+    remote_id_sniffing_duration: u8,
 }
 
 impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
@@ -59,8 +59,8 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
             timestamp: TIMESTAMP_DEFAULT,
             timestamp_offset: TIMESTAMP_OFFSET_DEFAULT,
             clock_twelve_hour: CLOCK_TWELVE_HOUR_DEFAULT,
-            smart_glasses_scan_duration: SMART_GLASSES_SCAN_DURATION_DEFAULT,
-            remote_id_scan_duration: REMOTE_ID_SCAN_DURATION_DEFAULT,
+            smart_glasses_sniffing_duration: SMART_GLASSES_SNIFFING_DURATION_DEFAULT,
+            remote_id_sniffing_duration: REMOTE_ID_SNIFFING_DURATION_DEFAULT,
         }
     }
 
@@ -183,29 +183,29 @@ impl Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> {
         self.clock_twelve_hour
     }
 
-    pub fn set_smart_glasses_scan_duration(&mut self, scan_duration: u8) {
+    pub fn set_smart_glasses_sniffing_duration(&mut self, sniffing_duration: u8) {
         if self.storage.lock(|storage| {
-            storage.borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(SMART_GLASSES_SCAN_DURATION_SETTINGS_KEY), scan_duration)
+            storage.borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(SMART_GLASSES_SNIFFING_DURATION_SETTINGS_KEY), sniffing_duration)
         })
             .is_ok() {
-                self.smart_glasses_scan_duration = scan_duration;
+                self.smart_glasses_sniffing_duration = sniffing_duration;
             }
     }
 
     pub fn get_smart_glasses_sniffing_duration(&self) -> u8 {
-        self.smart_glasses_scan_duration
+        self.smart_glasses_sniffing_duration
     }
 
-    pub fn set_remote_id_scan_duration(&mut self, scan_duration: u8) {
+    pub fn set_remote_id_sniffing_duration(&mut self, sniffing_duration: u8) {
         if self.storage.lock(|storage| {
-            storage.borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(REMOTE_ID_SCAN_DURATION_SETTINGS_KEY), scan_duration)
+            storage.borrow_mut().set(&Key::from_str(SETTINGS_NAMESPACE_KEY), &Key::from_str(REMOTE_ID_SNIFFING_DURATION_SETTINGS_KEY), sniffing_duration)
         })
             .is_ok() {
-                self.remote_id_scan_duration = scan_duration;
+                self.remote_id_sniffing_duration = sniffing_duration;
             }
     }
 
     pub fn get_remote_id_sniffing_duration(&self) -> u8 {
-        self.remote_id_scan_duration
+        self.remote_id_sniffing_duration
     }
 }

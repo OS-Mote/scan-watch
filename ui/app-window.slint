@@ -56,9 +56,9 @@ export component MainWindow inherits Window {
     property <HomeView> showing-home-view: HomeView.clock;
     in property <bool> remote-id-detected: false;
     in property <bool> smart-glasses-detected: false;
-    in property <NetworkCameraSnifferTaskState> network-camera-scan-task-state: NetworkCameraSnifferTaskState.stopped;
-    in property <SmartGlassesSniffingTaskState> smart-glasses-scan-task-state: SmartGlassesSniffingTaskState.stopped;
-    in property <RemoteIdSnifferTaskState> remote-id-scan-task-state: RemoteIdSnifferTaskState.stopped;
+    in property <NetworkCameraSnifferTaskState> network-camera-sniffing-task-state: NetworkCameraSnifferTaskState.stopped;
+    in property <SmartGlassesSniffingTaskState> smart-glasses-sniffing-task-state: SmartGlassesSniffingTaskState.stopped;
+    in property <RemoteIdSnifferTaskState> remote-id-sniffing-task-state: RemoteIdSnifferTaskState.stopped;
     in-out property <bool> clock-twelve-hour: false;
     in-out property <bool> dark-mode: false;
 
@@ -75,12 +75,12 @@ export component MainWindow inherits Window {
     callback set-screen-timeout(timeout: int);
     pure callback get-screen-timeout() -> int;
     callback set-screen-dark-mode(dark-mode: bool);
-    callback set-smart-glasses-scan-duration(duration: int);
-    pure callback get-smart-glasses-scan-duration() -> int;
-    callback set-remote-id-scan-duration(duration: int);
-    pure callback get-remote-id-scan-duration() -> int;
-    callback set-remote-id-scan-task-command(command: RemoteIdSnifferTaskCommand);
-    callback set-smart-glasses-scan-task-command(command: SmartGlassesSnifferTaskCommand);
+    callback set-smart-glasses-sniffing-duration(duration: int);
+    pure callback get-smart-glasses-sniffing-duration() -> int;
+    callback set-remote-id-sniffing-duration(duration: int);
+    pure callback get-remote-id-sniffing-duration() -> int;
+    callback set-remote-id-sniffing-task-command(command: RemoteIdSnifferTaskCommand);
+    callback set-smart-glasses-sniffing-task-command(command: SmartGlassesSnifferTaskCommand);
     callback send-haptic-strong-click();
     callback update-datetime(hour: int, minute: int, second: int, day: int, month: int, year: int, day-of-week: int);
     callback update-battery-status(percent-charged: int, is-charging: bool);
@@ -123,23 +123,23 @@ export component MainWindow inherits Window {
                         network-camera-scan-button := ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--speed-camera-outline-rounded.png");
                             dark-mode: root.dark-mode;
-                            enabled: smart-glasses-scan-task-state != SmartGlassesSniffingTaskState.running && remote-id-scan-task-state != RemoteIdSnifferTaskState.running;
+                            enabled: smart-glasses-sniffing-task-state != SmartGlassesSniffingTaskState.running && remote-id-sniffing-task-state != RemoteIdSnifferTaskState.running;
                         }
                         smart-glasses-scan-button := ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--eyeglasses-2-rounded.png");
                             dark-mode: root.dark-mode;
-                            enabled: network-camera-scan-task-state != NetworkCameraSnifferTaskState.running && remote-id-scan-task-state != RemoteIdSnifferTaskState.running;
+                            enabled: network-camera-sniffing-task-state != NetworkCameraSnifferTaskState.running && remote-id-sniffing-task-state != RemoteIdSnifferTaskState.running;
                             
                             clicked => {
-                                root.set-smart-glasses-scan-task-command(root.smart-glasses-scan-task-state == SmartGlassesSniffingTaskState.stopped ? SmartGlassesSnifferTaskCommand.start : SmartGlassesSnifferTaskCommand.stop);
+                                root.set-smart-glasses-sniffing-task-command(root.smart-glasses-sniffing-task-state == SmartGlassesSniffingTaskState.stopped ? SmartGlassesSnifferTaskCommand.start : SmartGlassesSnifferTaskCommand.stop);
                                 root.send-haptic-strong-click();
                             }
 
                             states [
-                                detected when root.smart-glasses-scan-task-state == SmartGlassesSniffingTaskState.running  && root.smart-glasses-detected: {
+                                detected when root.smart-glasses-sniffing-task-state == SmartGlassesSniffingTaskState.running  && root.smart-glasses-detected: {
                                     activated: true;
                                 }
-                                running when root.smart-glasses-scan-task-state == SmartGlassesSniffingTaskState.running && !root.smart-glasses-detected: {
+                                running when root.smart-glasses-sniffing-task-state == SmartGlassesSniffingTaskState.running && !root.smart-glasses-detected: {
                                     running: true;
                                 }
                             ]
@@ -147,18 +147,18 @@ export component MainWindow inherits Window {
                         ImageButton {
                             icon: @image-url("../resources/icons/material-symbols--drone-outline-rounded.png");
                             dark-mode: root.dark-mode;
-                            enabled: network-camera-scan-task-state != NetworkCameraSnifferTaskState.running && smart-glasses-scan-task-state != SmartGlassesSniffingTaskState.running;
+                            enabled: network-camera-sniffing-task-state != NetworkCameraSnifferTaskState.running && smart-glasses-sniffing-task-state != SmartGlassesSniffingTaskState.running;
 
                             clicked => {
-                                root.set-remote-id-scan-task-command(root.remote-id-scan-task-state == RemoteIdSnifferTaskState.stopped ? RemoteIdSnifferTaskCommand.start : RemoteIdSnifferTaskCommand.stop);
+                                root.set-remote-id-sniffing-task-command(root.remote-id-sniffing-task-state == RemoteIdSnifferTaskState.stopped ? RemoteIdSnifferTaskCommand.start : RemoteIdSnifferTaskCommand.stop);
                                 root.send-haptic-strong-click();
                             }
 
                             states [
-                                detected when root.remote-id-scan-task-state == RemoteIdSnifferTaskState.running  && root.remote-id-detected: {
+                                detected when root.remote-id-sniffing-task-state == RemoteIdSnifferTaskState.running  && root.remote-id-detected: {
                                     activated: true;
                                 }
-                                running when root.remote-id-scan-task-state == RemoteIdSnifferTaskState.running && !root.remote-id-detected: {
+                                running when root.remote-id-sniffing-task-state == RemoteIdSnifferTaskState.running && !root.remote-id-detected: {
                                     running: true;
                                 }
                             ]
@@ -321,7 +321,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     TextButton {
-                        text: "Scan Duration";
+                        text: "Sniffing Time";
                         color: root.dark-mode ? red : white;
 
                         clicked => {
@@ -745,7 +745,7 @@ export component MainWindow inherits Window {
             TouchArea {
                 VerticalLayout {
                     Text {
-                        text: "Scan Duration";
+                        text: "Sniffing Time";
                         color: root.dark-mode ? red : white;
                         font-size: 48px;
                         vertical-alignment: top;
@@ -764,7 +764,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     smart-glasses-scan-duration-slider := Slider{
-                        value: root.get-smart-glasses-scan-duration();
+                        value: root.get-smart-glasses-sniffing-duration();
                         minimum: 30;
                         maximum: 300;
 
@@ -785,7 +785,7 @@ export component MainWindow inherits Window {
                         }
                     }
                     remote-id-scan-duration-slider := Slider{
-                        value: root.get-remote-id-scan-duration();
+                        value: root.get-remote-id-sniffing-duration();
                         minimum:30;
                         maximum: 300;
 
@@ -807,8 +807,8 @@ export component MainWindow inherits Window {
                             text: "Done";
                             color: root.dark-mode ? red : white;
                             clicked => {
-                                root.set-smart-glasses-scan-duration(round(smart-glasses-scan-duration-slider.value));
-                                root.set-remote-id-scan-duration(round(remote-id-scan-duration-slider.value));
+                                root.set-smart-glasses-sniffing-duration(round(smart-glasses-scan-duration-slider.value));
+                                root.set-remote-id-sniffing-duration(round(remote-id-scan-duration-slider.value));
                                 root.send-haptic-strong-click();
 
                                 showing-settings-view = SettingsView.none;

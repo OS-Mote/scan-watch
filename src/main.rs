@@ -156,7 +156,7 @@ mod i2c_proxy_v0_2;
 use crate::{
     settings::{
         Settings,
-        SCAN_ALERT_DURATION
+        SNIFFING_ALERT_DURATION
     },
     axp2101::Axp2101,
     co5300::{
@@ -509,29 +509,29 @@ async fn main(spawner: Spawner) -> ! {
         });
     });
 
-    // Set the smart glasses scan duration.
-    main_window.on_set_smart_glasses_scan_duration(|duration| {
+    // Set the smart glasses sniffing duration.
+    main_window.on_set_smart_glasses_sniffing_duration(|duration| {
         settings_static_cell.lock(|settings_mutex| {
-            settings_mutex.borrow_mut().set_smart_glasses_scan_duration(duration as u8);
+            settings_mutex.borrow_mut().set_smart_glasses_sniffing_duration(duration as u8);
         });
     });
 
-    // Get the smart glasses scan duration.
-    main_window.on_get_smart_glasses_scan_duration(|| {
+    // Get the smart glasses sniffing duration.
+    main_window.on_get_smart_glasses_sniffing_duration(|| {
         settings_static_cell.lock(|settings_mutex| {
             settings_mutex.borrow().get_smart_glasses_sniffing_duration() as i32
         })
     });
 
-    // Set the Remote Id scan duration.
-    main_window.on_set_remote_id_scan_duration(|duration| {
+    // Set the Remote Id sniffing duration.
+    main_window.on_set_remote_id_sniffing_duration(|duration| {
         settings_static_cell.lock(|settings_mutex| {
-            settings_mutex.borrow_mut().set_remote_id_scan_duration(duration as u8);
+            settings_mutex.borrow_mut().set_remote_id_sniffing_duration(duration as u8);
         });
     });
 
-    // Get the Remote Id scan duration.
-    main_window.on_get_remote_id_scan_duration(|| {
+    // Get the Remote Id sniffing duration.
+    main_window.on_get_remote_id_sniffing_duration(|| {
         settings_static_cell.lock(|settings_mutex| {
             settings_mutex.borrow().get_remote_id_sniffing_duration() as i32
         })
@@ -548,13 +548,13 @@ async fn main(spawner: Spawner) -> ! {
             .num_days_in_month() as i32
     });
 
-    // Issue a Remote Id scan task command.
-    main_window.on_set_remote_id_scan_task_command(|command| {
+    // Issue a Remote Id sniffing task command.
+    main_window.on_set_remote_id_sniffing_task_command(|command| {
         REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.signal(command);
     });
 
-    // Issue a smart glasses scan task command.
-    main_window.on_set_smart_glasses_scan_task_command(|command| {
+    // Issue a smart glasses sniffing task command.
+    main_window.on_set_smart_glasses_sniffing_task_command(|command| {
         SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(command);
     });
 
@@ -612,9 +612,9 @@ async fn main(spawner: Spawner) -> ! {
             software_window.dispatch_event(touch_event);
         }
 
-        // Set the Remote Id scan task state on the main window.
-        if let Ok(remote_id_scan_task_state) = REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.try_lock() {
-            main_window.set_remote_id_scan_task_state(*remote_id_scan_task_state);
+        // Set the Remote Id sniffing task state on the main window.
+        if let Ok(remote_id_sniffing_task_state) = REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.try_lock() {
+            main_window.set_remote_id_sniffing_task_state(*remote_id_sniffing_task_state);
         }
 
         // Set the Remote Id alert on the main window.
@@ -622,9 +622,9 @@ async fn main(spawner: Spawner) -> ! {
             main_window.set_remote_id_detected(*remote_id_alert);
         }
 
-        // Set the smart glasses scan task state on the main window.
-        if let Ok(smart_glasses_scan_task_state) = SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.try_lock() {
-            main_window.set_smart_glasses_scan_task_state(*smart_glasses_scan_task_state);
+        // Set the smart glasses sniffing task state on the main window.
+        if let Ok(smart_glasses_sniffing_task_state) = SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.try_lock() {
+            main_window.set_smart_glasses_sniffing_task_state(*smart_glasses_sniffing_task_state);
         }
 
         // Set the smart glasses alert on the main window.
@@ -741,9 +741,9 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
 
         // Gracefully shutdown if battery has SLEEP_BATTERY_PERCENT charge or less..
         if battery_status.0 <= SLEEP_BATTERY_PERCENTAGE {
-            // Stop and wait for scans to complete with a join between..
+            // Stop and wait for sniffing to complete with a join between..
             join(
-                // Wait for the smart glasses scan to stop..
+                // Wait for the smart glasses sniffing to stop..
                 async {
                     SMART_GLASSES_SNIFFING_TASK_COMMAND_SIGNAL.signal(SmartGlassesSnifferTaskCommand::Stop);
 
@@ -753,7 +753,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
                         }
                     }
                 },
-                // And wait for the remote id scan to stop.
+                // And wait for the remote id sniffing to stop.
                 async {
                     REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL.signal(RemoteIdSnifferTaskCommand::Stop);
 
@@ -897,9 +897,9 @@ async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSect
             // Set up the Bluetooth scanner with configuration and handler.
             let mut scanner = Scanner::new(central);
             let scan_config = ScanConfig::default();
-            let ble_scan_handler = SmartGlassesBluetoothScanHandler{};
+            let ble_sniffing_handler = SmartGlassesBluetoothScanHandler{};
 
-            // Set the smart glasses scan state as running.
+            // Set the smart glasses sniffing task state as running.
             *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSniffingTaskState::Running;
 
             // Select between..
@@ -907,13 +907,13 @@ async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSect
                 // a join between..
                 join(
                     // The Bluetooth runner with handler future..
-                    runner.run_with_handler(&ble_scan_handler),
+                    runner.run_with_handler(&ble_sniffing_handler),
                     // And the scanner future.
                     scanner.scan(&scan_config)
                 ),
                 // And a select between..
                 select(
-                    // The scan duration future..
+                    // The sniffing duration future..
                     async {
                         let sniffing_started_instant = Instant::now();
 
@@ -941,7 +941,7 @@ async fn smart_glasses_sniffing_task(settings_static_cell: &'static CriticalSect
             )
                 .await;
 
-            // Set the smart glasses scan state as stopped.
+            // Set the smart glasses sniffing task state as stopped.
             *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await = SmartGlassesSniffingTaskState::Stopped;
         }
     }
@@ -974,11 +974,11 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
                 // Waiting for SCAN_ALERT_DURATION since the smart glasses detection
                 async {
                     loop {
-                        Timer::after_secs(SCAN_ALERT_DURATION).await;
+                        Timer::after_secs(SNIFFING_ALERT_DURATION).await;
                     }
                 },
                 async {
-                    // Waiting for the smart glasses scan task state to be Stopped.
+                    // Waiting for the smart glasses sniffing task state to be Stopped.
                     loop {
                         if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSniffingTaskState::Stopped {
                             return;
@@ -1095,9 +1095,9 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
             // Set up the Bluetooth scanner with configuration and handler.
             let mut scanner = Scanner::new(central);
             let scan_config = ScanConfig::default();
-            let ble_scan_handler = RemoteIdBluetoothScanHandler{};
+            let ble_sniffing_handler = RemoteIdBluetoothScanHandler{};
 
-            // Set the Remote Id scan state as running.
+            // Set the Remote Id sniffer task state as running.
             *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await = RemoteIdSnifferTaskState::Running;
 
             // Select between..
@@ -1105,7 +1105,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                 join(
                     join(
                         // The Bluetooth runner with handler future..
-                        runner.run_with_handler(&ble_scan_handler),
+                        runner.run_with_handler(&ble_sniffing_handler),
                         // And the scanner future.
                         scanner.scan(&scan_config)
                     ),
@@ -1127,7 +1127,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                 ),
                 // And a select between..
                 select(
-                    // The scan duration future..
+                    // The sniffing duration future..
                     async {
                         let sniffing_started_instant = Instant::now();
 
@@ -1154,7 +1154,7 @@ async fn remote_id_sniffing_task(settings_static_cell: &'static CriticalSectionM
                 )
             ).await;
 
-            // Set the Remote Id scan state as stopped.
+            // Set the Remote Id sniffer task state as stopped.
             *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await = RemoteIdSnifferTaskState::Stopped;
         }
     }
@@ -1187,11 +1187,11 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
                 // Waiting for SCAN_ALERT_DURATION since the Remote Id detection
                 async {
                     loop {
-                        Timer::after_secs(SCAN_ALERT_DURATION).await;
+                        Timer::after_secs(SNIFFING_ALERT_DURATION).await;
                     }
                 },
                 async {
-                    // Waiting for the Remote Id scan task state to be Stopped.
+                    // Waiting for the Remote Id sniffing task state to be Stopped.
                     loop {
                         if *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await == RemoteIdSnifferTaskState::Stopped {
                             return;
