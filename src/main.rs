@@ -1010,7 +1010,7 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
                 // Match the service data bytes as one u16 to OPENDRONEID_SERVICE_UUID.
                 if let AdStructure::ServiceData16 { uuid, data: _ } = structure &&
                 ((uuid[0] as u16) << 8) | uuid[1] as u16 == OPENDRONEID_SERVICE_UUID {
-                    // Signal an Open Drone Id packet has been detected.
+                    // Signal an Remote Id packet has been detected.
                     REMOTE_ID_DETECTED_SIGNAL.signal(());
                 }
             } 
