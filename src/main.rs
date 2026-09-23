@@ -961,22 +961,22 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
         let _ = select(
             // Repeatedly triggering a haptic alert..
             async {
-                haptic_static_cell.lock(|haptic_mutex| {
-                    let mut haptic = haptic_mutex.borrow_mut();
+                loop {
+                    haptic_static_cell.lock(|haptic_mutex| {
+                        let mut haptic = haptic_mutex.borrow_mut();
 
-                    let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
-                    let _ = haptic.set_go(true);
-                });
+                        let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
+                        let _ = haptic.set_go(true);
+                    });
 
-                Timer::after_millis(250).await;
+                    Timer::after_millis(250).await;
+                }
             },
             // And a select between..
             select(
                 // Waiting for SCAN_ALERT_DURATION since the smart glasses detection
                 async {
-                    loop {
-                        Timer::after_secs(SNIFFING_ALERT_DURATION).await;
-                    }
+                    Timer::after_secs(SNIFFING_ALERT_DURATION).await;
                 },
                 async {
                     // Waiting for the smart glasses sniffing task state to be Stopped.
@@ -984,6 +984,8 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
                         if *SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX.lock().await == SmartGlassesSniffingTaskState::Stopped {
                             return;
                         }
+
+                        Timer::after_millis(16).await;
                     }
                 }
             )
@@ -994,7 +996,7 @@ async fn smart_glasses_alert_task(haptic_static_cell: &'static CriticalSectionMu
     }
 }
 
-const REMOTE_ID_SERVICE_UUID: u16 = 0xFFF8;
+const REMOTE_ID_SERVICE_UUID: u16 = 0xFFFA;
 
 struct RemoteIdBluetoothScanHandler {}
 
@@ -1010,7 +1012,7 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
             while let Some(Ok(structure)) = decoder.next() {
                 // Match the service data bytes as one u16 to REMOTE_ID_SERVICE_UUID.
                 if let AdStructure::ServiceData16 { uuid, data: _ } = structure &&
-                ((uuid[0] as u16) << 8) | uuid[1] as u16 == REMOTE_ID_SERVICE_UUID {
+                ((uuid[1] as u16) << 8) | uuid[0] as u16 == REMOTE_ID_SERVICE_UUID {
                     // Signal an Remote Id packet has been detected.
                     REMOTE_ID_DETECTED_SIGNAL.signal(());
                 }
@@ -1019,11 +1021,11 @@ impl EventHandler for RemoteIdBluetoothScanHandler {
     }
 }
 
-const REMOTE_ID_WIFI_CHANNELS: [u8; 21] = [
+const REMOTE_ID_WIFI_CHANNELS: [u8; 17] = [
     // 2.4 GHz
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
     // 5.8 GHz
-    36, 40, 44, 48, 149, 153, 157, 161
+    149, 153, 157, 161
 ];
 
 #[task]
@@ -1174,22 +1176,22 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
         let _ = select(
             // Repeatedly triggering a haptic alert..
             async {
-                haptic_static_cell.lock(|haptic| {
-                    let mut haptic = haptic.borrow_mut();
+                loop {
+                    haptic_static_cell.lock(|haptic| {
+                        let mut haptic = haptic.borrow_mut();
 
-                    let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
-                    let _ = haptic.set_go(true);
-                });
+                        let _ = haptic.set_single_effect(Effect::LongDoubleSharpClickStrongTwo80);
+                        let _ = haptic.set_go(true);
+                    });
 
-                Timer::after_millis(250).await;
+                    Timer::after_millis(250).await;
+                }
             },
             // And a select between..
             select(
                 // Waiting for SNIFFING_ALERT_DURATION since the Remote Id detection
                 async {
-                    loop {
-                        Timer::after_secs(SNIFFING_ALERT_DURATION).await;
-                    }
+                    Timer::after_secs(SNIFFING_ALERT_DURATION).await;
                 },
                 async {
                     // Waiting for the Remote Id sniffing task state to be Stopped.
@@ -1197,6 +1199,8 @@ async fn remote_id_alert_task(haptic_static_cell: &'static CriticalSectionMutex<
                         if *REMOTE_ID_SNIFFING_TASK_STATE_MUTEX.lock().await == RemoteIdSnifferTaskState::Stopped {
                             return;
                         }
+
+                        Timer::after_millis(16).await;
                     }
                 }
             )

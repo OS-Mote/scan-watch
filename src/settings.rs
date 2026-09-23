@@ -33,7 +33,7 @@ const SMART_GLASSES_SNIFFING_DURATION_DEFAULT: u8 = 30;
 const REMOTE_ID_SNIFFING_DURATION_SETTINGS_KEY: &str = "rmtid-dur";
 const REMOTE_ID_SNIFFING_DURATION_DEFAULT: u8 = 30;
 
-pub const SNIFFING_ALERT_DURATION: u64 = 15;
+pub const SNIFFING_ALERT_DURATION: u64 = 5;
 
 pub struct Settings<S: 'static> {
     storage: &'static S,
