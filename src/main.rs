@@ -18,7 +18,8 @@ use alloc::{
     boxed::Box,
     rc::Rc,
     vec,
-    vec::Vec
+    vec::Vec,
+    string::String
 };
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
@@ -70,7 +71,11 @@ use esp_hal::{
         reset_reason
     },
     time::Rate,
-    timer::timg::TimerGroup
+    timer::timg::TimerGroup,
+    uart::{
+        Config,
+        UartRx
+    }
 };
 use esp_storage::FlashStorage;
 use esp_nvs::{
@@ -145,6 +150,11 @@ use rand_core::{
     Rng
 };
 use rand_xoshiro::Xoshiro256PlusPlus;
+use nmea::Nmea;
+use xl9555::{
+    driver::XL9555,
+    Pin
+};
 
 mod qspi_bus;
 mod framebuffer;
@@ -168,6 +178,12 @@ use crate::{
     qspi_bus::QspiBus,
     i2c_proxy_v0_2::I2cProxyV0_2
 };
+
+struct Position {
+    latitude: f64,
+    longitude: f64,
+    altitude: f32
+}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
@@ -217,6 +233,7 @@ static SMART_GLASSES_SNIFFING_TASK_STATE_MUTEX: Mutex<CriticalSectionRawMutex, S
 static SMART_GLASSES_ALERT_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static FLASHLIGHT_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(false);
 static DISPLAY_ON_MUTEX: Mutex<CriticalSectionRawMutex, bool> = Mutex::new(true);
+static POSITION_MUTEX: Mutex<CriticalSectionRawMutex, Option<Position>> = Mutex::new(None);
 
 static REMOTE_ID_SNIFFING_TASK_COMMAND_SIGNAL: Signal<CriticalSectionRawMutex, RemoteIdSnifferTaskCommand> = Signal::new();
 static REMOTE_ID_DETECTED_SIGNAL: Signal<CriticalSectionRawMutex, ()> = Signal::new();
@@ -238,6 +255,16 @@ async fn main(spawner: Spawner) -> ! {
     let sw_interrupt = esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
 
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
+
+    let uart_config = Config::default().with_baudrate(38400);
+
+    let uart1 = esp_hal::uart::Uart::new(peripherals.UART1, uart_config)
+        .unwrap()
+        .with_rx(peripherals.GPIO44)
+        .with_tx(peripherals.GPIO43)
+        .into_async();
+
+    let (gps_uart_rx, _gps_uart_tx) = uart1.split();
 
     // Initialize the realtime clock.
     let mut rtc = Rtc::new(peripherals.LPWR);
@@ -264,6 +291,15 @@ async fn main(spawner: Spawner) -> ! {
     let mut power = Axp2101::new(RefCellDevice::new(static_i2c_ref));
     let _ = power.init();
     let _ = power.trim_adc_channels();
+
+    let mut xl9555 = XL9555::init(RefCellDevice::new(static_i2c_ref), (false, false, false));
+
+    if let Ok(xl9555_config) = xl9555.read_all_value() {
+        let _ = xl9555.xl9555_ioconfig(xl9555_config | 0b1111111111110111);
+    }
+
+    let _ = xl9555.set_value(Pin::P13, true);
+
 
     // If we woke up on a timer, check the battery charge.
     // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
@@ -602,6 +638,7 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(remote_id_alert_task(haptic_static_cell).unwrap());
     spawner.spawn(smart_glasses_sniffing_task(settings_static_cell, rtc_static_cell).unwrap());
     spawner.spawn(smart_glasses_alert_task(haptic_static_cell).unwrap());
+    spawner.spawn(gps_update_task(gps_uart_rx).unwrap());
 
     main_window.show().unwrap();
 
@@ -664,6 +701,53 @@ async fn main(spawner: Spawner) -> ! {
         }
 
         Timer::after_millis(16).await;
+    }
+}
+
+#[task]
+async fn gps_update_task(mut gps_uart_rx: UartRx<'static, esp_hal::Async>) {
+    let mut nmea = Nmea::default();
+    let mut buffer = [0u8; 64];
+    let mut line_buffer = String::new();
+
+    loop {
+        match gps_uart_rx.read_async(&mut buffer).await {
+            Ok(bytes_read) if bytes_read > 0 => {
+                for &byte in &buffer[..bytes_read] {
+                    if line_buffer.len() >= 128 {
+                        line_buffer.clear();
+                    }
+
+                    line_buffer.push(byte as char);
+
+                    if byte == b'\n' {
+                        let raw_str = line_buffer.as_str();
+
+                        if let Some(start_idx) = raw_str.find('$') {
+                            let clean_sentence = &raw_str[start_idx..];
+
+                            if let Ok(_sentence_type) = nmea.parse(clean_sentence) {
+                                println!("{}", clean_sentence);
+                                if let (Some(latitude), Some(longitude), Some(altitude)) = (nmea.latitude, nmea.longitude, nmea.altitude) {
+                                    *POSITION_MUTEX.lock().await = Some(
+                                        Position {
+                                            longitude,
+                                            latitude,
+                                            altitude
+                                        }
+                                    );
+                                }
+                            }
+                        }
+
+                        line_buffer.clear();
+                    }
+                }
+            }
+            _ => {
+                Timer::after_millis(250).await;
+            }
+        }
     }
 }
 

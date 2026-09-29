@@ -5,6 +5,7 @@
 // Reference: 05_LVGL_AXP2101_ADC_Data.ino
 
 use embedded_hal::i2c::I2c;
+use esp_println::println;
 
 const AXP2101_ADDR: u8 = 0x34;
 
@@ -23,7 +24,9 @@ const REG_VSYS_L: u8 = 0x3B;
 const REG_DC_ONOFF: u8 = 0x80;     // DC output on/off + DVM control
 const REG_DC_VOL0: u8 = 0x82;      // DCDC1 voltage setting
 const REG_LDO_ONOFF0: u8 = 0x90;   // ALDO1-4 on/off control
+const REG_BLDO_ONOFF0: u8 = 0x94;
 const REG_LDO_VOL0: u8 = 0x92;     // ALDO1 voltage setting
+const REG_BLDO_VOL0: u8 = 0x96;     // ALDO4 voltage setting
 const REG_ADC_ENABLE: u8 = 0x30;
 const REG_IRQ_ENABLE0: u8 = 0x40;
 const REG_IRQ_ENABLE1: u8 = 0x41;
@@ -66,9 +69,13 @@ impl<I: I2c> Axp2101<I> {
         // ALDO1 = 3300mV (display/peripheral power)
         // ALDO1 voltage: reg 0x92, value = (3300 - 500) / 100 = 28
         self.write_reg(REG_LDO_VOL0, 28)?;
-        // Enable ALDO1: reg 0x90, bit 0 = ALDO1 enable
+        self.write_reg(REG_BLDO_VOL0, 28)?;
+
         let ldo_ctrl = self.read_reg(REG_LDO_ONOFF0)?;
-        self.write_reg(REG_LDO_ONOFF0, ldo_ctrl | 0x01)?;
+
+        self.write_reg(REG_LDO_ONOFF0, ldo_ctrl | 0x11)?;
+
+        println!("{:X}", self.read_reg(REG_LDO_ONOFF0)?);
 
         // === Disable unused rails (save power) ===
         // (Skip for now - don't touch what's already configured by bootloader)
