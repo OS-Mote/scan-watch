@@ -62,7 +62,8 @@ use esp_hal::{
         Mode as SpiMode,
         master::{
             Config as SpiConfig,
-            Spi
+            Spi,
+            SpiDmaBus
         }
     },
     system::{
@@ -90,8 +91,12 @@ use esp_radio::{
 use embassy_sync::{
     mutex::Mutex,
     blocking_mutex::{
+        Mutex as BlockingMutex,
         CriticalSectionMutex,
-        raw::CriticalSectionRawMutex
+        raw::{
+            CriticalSectionRawMutex,
+            NoopRawMutex
+        }
     },
     signal::Signal
 };
@@ -120,6 +125,7 @@ use core::{
     time::Duration,
 };
 use embedded_hal_bus::i2c::RefCellDevice;
+use embedded_hal_bus::spi::RefCellDevice as SpiRefCellDevice;
 use embedded_graphics::{
     prelude::*,
     pixelcolor::Rgb565
@@ -155,6 +161,9 @@ use xl9555::{
     driver::XL9555,
     Pin
 };
+use embassy_embedded_hal::shared_bus::blocking::spi::SpiDevice;
+use embedded_sdmmc::{Error, Mode, SdCard, SdCardError, TimeSource, VolumeIdx, VolumeManager};
+use embedded_hal_bus::spi::CriticalSectionDevice;
 
 mod qspi_bus;
 mod framebuffer;
@@ -221,7 +230,8 @@ const SLEEP_SECONDS_FOR_CHARING: u64 = 10;
 static RTC_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Rtc<'static>>>> = StaticCell::new();
 static POWER_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Axp2101<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>>>>> = StaticCell::new();
 static FLASH_STORAGE_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>> = StaticCell::new();
-static DISPLAY_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static>>>> = StaticCell::new();
+static DISPLAY_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Co5300Display<'static, 'static>>>> = StaticCell::new();
+static SD_CARD_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<SdCard<SpiRefCellDevice<'static, SpiDmaBus<'static, esp_hal::Blocking>, Output<'static>, embedded_hal_bus::spi::NoDelay>, Delay>>>> = StaticCell::new();
 static TOUCH_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<BlockingCST92xx<RefCellDevice<'static, I2c<'static, esp_hal::Blocking>>, Delay>>>> = StaticCell::new();
 static HAPTIC_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Drv2605<I2cProxyV0_2>>>> = StaticCell::new();
 static SETTINGS_STATIC_CELL: StaticCell<CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>> = StaticCell::new();
@@ -300,7 +310,6 @@ async fn main(spawner: Spawner) -> ! {
 
     let _ = xl9555.set_value(Pin::P13, true);
 
-
     // If we woke up on a timer, check the battery charge.
     // If the battery charge is less than SLEEP_BATTERY_PERCENT, go back to sleep.
     if let SleepSource::Timer = wakeup_cause() && power.get_battery_percent().unwrap_or(0) <= SLEEP_BATTERY_PERCENTAGE {
@@ -341,7 +350,7 @@ async fn main(spawner: Spawner) -> ! {
     let (rx_buf, rx_desc, tx_buf, tx_desc) = dma_buffers!(8000);
     let dma_rx = DmaRxBuf::new(rx_desc, rx_buf).unwrap();
     let dma_tx = DmaTxBuf::new(tx_desc, tx_buf).unwrap();
-    let spi = Spi::new(peripherals.SPI2, spi_config)
+    let spi_bus = Spi::new(peripherals.SPI2, spi_config)
         .expect("SPI initilization failed.")
         .with_sck(peripherals.GPIO40)
         .with_sio0(peripherals.GPIO38)
@@ -351,16 +360,25 @@ async fn main(spawner: Spawner) -> ! {
         .with_dma(peripherals.DMA_CH0)
         .with_buffers(dma_rx, dma_tx);
 
-    // Initialize the display.
-    let cs = Output::new(peripherals.GPIO41, Level::High, OutputConfig::default());
-    let reset = Output::new(peripherals.GPIO37, Level::High, OutputConfig::default());
-    let mut display = Co5300Display::new(QspiBus::new(spi, cs), reset);
+    let spi_bus_ref = RefCell::new(spi_bus);
+    let spi_bus_ref_boxed = Box::new(spi_bus_ref);
+    let static_spi_bus_ref: &'static mut RefCell<SpiDmaBus<'static, esp_hal::Blocking>> = Box::leak(spi_bus_ref_boxed);
+
+    let display_cs = Output::new(peripherals.GPIO41, Level::High, OutputConfig::default());
+    let display_reset = Output::new(peripherals.GPIO37, Level::High, OutputConfig::default());
+    let mut display = Co5300Display::new(QspiBus::new(static_spi_bus_ref, display_cs), display_reset);
 
     display.init();
 
     // Enable Tearing Effect output on CO5300 (TE pin is GPIO13).
     // Using command 0x35 (TEARON) and param 0x00 (VBlank only).
     display.bus_mut().write_c8d8(0x35, 0x00);
+
+    let sd_card_cs = Output::new(peripherals.GPIO21, Level::High, OutputConfig::default());
+    let sd_spi_device = SpiRefCellDevice::new_no_delay(static_spi_bus_ref, sd_card_cs).unwrap();
+    let sd_card = SdCard::new(sd_spi_device, Delay::new());
+
+    let sd_card_static_cell = SD_CARD_STATIC_CELL.init(CriticalSectionMutex::new(RefCell::new(sd_card)));
 
     let te_pin = Input::new(peripherals.GPIO13, InputConfig::default());
 
@@ -874,7 +892,7 @@ async fn battery_status_update_task(power_static_cell: &'static CriticalSectionM
 }
 
 #[task]
-async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static>>>, settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
+async fn display_timeout_countdown_task(display_static_cell: &'static CriticalSectionMutex<RefCell<Co5300Display<'static, 'static>>>, settings_static_cell: &'static CriticalSectionMutex<RefCell<Settings<CriticalSectionMutex<RefCell<Nvs<FlashStorage<'static>>>>>>>) {
     let mut last_touch_instant = Instant::now();
 
     loop {

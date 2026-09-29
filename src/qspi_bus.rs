@@ -4,25 +4,28 @@
 // QSPI bus driver for CO5300 AMOLED display - DMA version
 // Uses SpiDmaBus for large transfers via DMA
 
+use embedded_hal::spi::SpiDevice;
 use alloc::vec;
 use alloc::vec::Vec;
 use esp_hal::gpio::Output;
 use esp_hal::spi::master::{Address, Command, DataMode, SpiDmaBus};
 use esp_hal::Blocking;
+use core::cell::RefCell;
+
 
 // Max bytes per DMA transfer (must fit in DMA TX buffer)
 const DMA_CHUNK: usize = 8000;
 
-pub struct QspiBus<'d> {
-    spi: SpiDmaBus<'d, Blocking>,
-    cs: Output<'d>,
-    scratch: Vec<u8>, // heap-allocated scratch buffer for pixel conversion
+pub struct QspiBus<'a, 'd> {
+    bus: &'a RefCell<SpiDmaBus<'d, Blocking>>,
+    cs: Output<'d>, 
+    scratch: Vec<u8>,
 }
 
-impl<'d> QspiBus<'d> {
-    pub fn new(spi: SpiDmaBus<'d, Blocking>, cs: Output<'d>) -> Self {
+impl<'a, 'd> QspiBus<'a, 'd> {
+    pub fn new(bus: &'a RefCell<SpiDmaBus<'d, Blocking>>, cs: Output<'d>) -> Self {
         Self {
-            spi,
+            bus,
             cs,
             scratch: vec![0u8; DMA_CHUNK],
         }
@@ -33,7 +36,7 @@ impl<'d> QspiBus<'d> {
 
     pub fn write_command(&mut self, reg: u8) {
         self.cs_low();
-        let _ = self.spi.half_duplex_write(
+        let _ = self.bus.borrow_mut().half_duplex_write(
             DataMode::Single, Command::_8Bit(0x02, DataMode::Single),
             Address::_24Bit((reg as u32) << 8, DataMode::Single), 0, &[],
         );
@@ -42,7 +45,7 @@ impl<'d> QspiBus<'d> {
 
     pub fn write_c8d8(&mut self, reg: u8, data: u8) {
         self.cs_low();
-        let _ = self.spi.half_duplex_write(
+        let _ = self.bus.borrow_mut().half_duplex_write(
             DataMode::Single, Command::_8Bit(0x02, DataMode::Single),
             Address::_24Bit((reg as u32) << 8, DataMode::Single), 0, &[data],
         );
@@ -52,7 +55,7 @@ impl<'d> QspiBus<'d> {
     pub fn write_c8d16d16(&mut self, reg: u8, d1: u16, d2: u16) {
         let data = [(d1 >> 8) as u8, d1 as u8, (d2 >> 8) as u8, d2 as u8];
         self.cs_low();
-        let _ = self.spi.half_duplex_write(
+        let _ = self.bus.borrow_mut().half_duplex_write(
             DataMode::Single, Command::_8Bit(0x02, DataMode::Single),
             Address::_24Bit((reg as u32) << 8, DataMode::Single), 0, &data,
         );
@@ -61,7 +64,7 @@ impl<'d> QspiBus<'d> {
 
     pub fn begin_pixels(&mut self) {
         self.cs_low();
-        let _ = self.spi.half_duplex_write(
+        let _ = self.bus.borrow_mut().half_duplex_write(
             DataMode::Quad, Command::_8Bit(0x32, DataMode::Single),
             Address::_24Bit(0x003C00, DataMode::Single), 0, &[],
         );
@@ -77,7 +80,7 @@ impl<'d> QspiBus<'d> {
                 self.scratch[i * 2] = (px >> 8) as u8;
                 self.scratch[i * 2 + 1] = px as u8;
             }
-            let _ = self.spi.half_duplex_write(
+            let _ = self.bus.borrow_mut().half_duplex_write(
                 DataMode::Quad, Command::None, Address::None, 0, &self.scratch[..n * 2],
             );
             remaining = &remaining[n..];
@@ -99,13 +102,13 @@ impl<'d> QspiBus<'d> {
                 self.scratch[i * 2 + 1] = px as u8;
             }
             if first {
-                let _ = self.spi.half_duplex_write(
+                let _ = self.bus.borrow_mut().half_duplex_write(
                     DataMode::Quad, Command::_8Bit(0x32, DataMode::Single),
                     Address::_24Bit(0x003C00, DataMode::Single), 0, &self.scratch[..n * 2],
                 );
                 first = false;
             } else {
-                let _ = self.spi.half_duplex_write(
+                let _ = self.bus.borrow_mut().half_duplex_write(
                     DataMode::Quad, Command::None, Address::None, 0, &self.scratch[..n * 2],
                 );
             }
@@ -131,13 +134,13 @@ impl<'d> QspiBus<'d> {
             let n = remaining.min(max_px as u32);
             let bytes = (n as usize) * 2;
             if first {
-                let _ = self.spi.half_duplex_write(
+                let _ = self.bus.borrow_mut().half_duplex_write(
                     DataMode::Quad, Command::_8Bit(0x32, DataMode::Single),
                     Address::_24Bit(0x003C00, DataMode::Single), 0, &self.scratch[..bytes],
                 );
                 first = false;
             } else {
-                let _ = self.spi.half_duplex_write(
+                let _ = self.bus.borrow_mut().half_duplex_write(
                     DataMode::Quad, Command::None, Address::None, 0, &self.scratch[..bytes],
                 );
             }

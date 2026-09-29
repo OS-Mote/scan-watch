@@ -51,8 +51,8 @@ const RST_DELAY_MS: u32 = 200;
 const SLPOUT_DELAY_MS: u32 = 120;
 const SLPIN_DELAY_MS: u32 = 120;
 
-pub struct Co5300Display<'d> {
-    bus: QspiBus<'d>,
+pub struct Co5300Display<'a, 'd> {
+    bus: QspiBus<'a, 'd>,
     reset: Output<'d>,
     delay: Delay,
     width: u16,
@@ -66,8 +66,8 @@ pub enum DisplayError {
     BusError,
 }
 
-impl<'d> Co5300Display<'d> {
-    pub fn new(bus: QspiBus<'d>, reset: Output<'d>) -> Self {
+impl<'a, 'd> Co5300Display<'a, 'd> {
+    pub fn new(bus: QspiBus<'a, 'd>, reset: Output<'d>) -> Self {
         Self {
             bus,
             reset,
@@ -141,7 +141,7 @@ impl<'d> Co5300Display<'d> {
     }
 
     /// Get mutable reference to bus (for framebuffer flush).
-    pub fn bus_mut(&mut self) -> &mut QspiBus<'d> {
+    pub fn bus_mut(&mut self) -> &mut QspiBus<'a, 'd> {
         &mut self.bus
     }
 
@@ -169,13 +169,13 @@ impl<'d> Co5300Display<'d> {
     }
 }
 
-impl OriginDimensions for Co5300Display<'_> {
+impl OriginDimensions for Co5300Display<'_, '_> {
     fn size(&self) -> Size {
         Size::new(self.width as u32, self.height as u32)
     }
 }
 
-impl DrawTarget for Co5300Display<'_> {
+impl DrawTarget for Co5300Display<'_, '_> {
     type Color = Rgb565;
     type Error = DisplayError;
 
