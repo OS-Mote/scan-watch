@@ -49,6 +49,8 @@ cst92xx = { path = "../cst92xx-touch-driver" } #Fixme
 slint = { version = "1.17.1", default-features = false, features = ["unsafe-single-threaded", "compat-1-2", "renderer-software", "libm"] }
 rand_xoshiro = "0.8.1"
 rand_core = "0.10.1"
+nmea = { version = "0.8.0", default-features = false, features = ["all-sentences"] }
+xl9555 = { git = "https://github.com/KaidRommel/xl9555-rs.git" }
 
 [build-dependencies]
 slint-build = { version = "1.7" }
